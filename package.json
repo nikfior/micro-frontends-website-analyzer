@@ -1,0 +1,30 @@
+{
+  "dependencies": {
+    "dotenv": "^10.0.0",
+    "mongoose": "^6.1.3"
+  },
+  "name": "back-end",
+  "description": "Back-end of the web app",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nikfior/web-app-back-end.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/nikfior/web-app-back-end/issues"
+  },
+  "homepage": "https://github.com/nikfior/web-app-back-end#readme",
+  "devDependencies": {
+    "eslint": "^8.5.0",
+    "eslint-config-prettier": "^8.3.0",
+    "eslint-plugin-prettier": "^4.0.0",
+    "nodemon": "^2.0.15",
+    "prettier": "^2.5.1"
+  }
+}
