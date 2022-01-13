@@ -1,4 +1,4 @@
-// const DB_Model_Users = require("../db/Model_Users");
+const DB_Model_Users = require("../db/Model_Users");
 const axios = require("axios");
 
 const githubLogin = async (req, res) => {
@@ -22,20 +22,26 @@ const githubLoginCallback = async (req, res) => {
 
     const user = await getGithubUser(access_token);
     if (user) {
-      req.session.accessToken = access_token;
       req.session.githubId = user.data.id.toString();
 
-      //   await DB_Model_Users.create({
-      //     accessToken: access_token,
-      //     githubId: user.data.id,
-      //   });
+      const userDB = await DB_Model_Users.findOneAndUpdate(
+        { githubId: user.data.id },
+        {
+          accessToken: access_token,
+        },
+        { new: true, upsert: true }
+      );
+
+      // const dataDB = await DB_Model_Users.create({});
+
+      req.session.id = userDB._id;
 
       res.redirect("/admin");
     } else {
       res.send("Login did not succeed!");
     }
   } catch (error) {
-    res.status(500).json({ msg: error.name });
+    res.status(500).json({ msg: error.message });
   }
 };
 

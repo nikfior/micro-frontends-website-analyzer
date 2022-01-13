@@ -7,9 +7,9 @@ const TaskSchema = new mongoose.Schema({
     trim: true,
   },
   html: {
-    type: String,
+    type: Array,
     required: [true, "html data must be provided"],
   },
 });
 
-module.exports = mongoose.model("Site", TaskSchema);
+module.exports = mongoose.model("Dataset", TaskSchema, "dataset");

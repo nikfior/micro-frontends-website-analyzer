@@ -1,6 +1,8 @@
 const DB_Model_Sites = require("../db/Model_Site");
 const axios = require("axios");
-// const { parse } = require("node-html-parser");
+const { parse } = require("node-html-parser");
+// const jsdom = require("jsdom");
+// const { JSDOM } = jsdom;
 
 const getAllSites = async (req, res) => {
   try {
@@ -17,20 +19,39 @@ const createSite = async (req, res) => {
     const html = await axios.get(req.body.url);
     // console.log(html.status);
     // console.log(html.data);
+    const dom = parse(html.data);
+    const subDirs = await crawler(dom);
+    subDirs.unshift(html.data);
 
-    // const root = parse(html.data);
-    // console.log(root.querySelector("input"));
-
-    // console.log(`first ${req.body.url}`);
-    // console.log(html);
     const site = await DB_Model_Sites.create({
       url: req.body.url,
-      html: html.data,
+      html: subDirs,
     });
     res.status(201).json({ site });
   } catch (error) {
     res.status(500).json({ msg: error.name });
   }
+};
+
+const crawler = async (dom) => {
+  const subdirs = dom.querySelectorAll("a");
+  let subdirHTMLArr = [];
+  for (let node of subdirs) {
+    try {
+      let html = await axios.get(node.getAttribute("href"));
+      subdirHTMLArr.push(html.data);
+    } catch (error) {
+      if (
+        error.message != "Cannot read property 'replace' of null" ||
+        !(error instanceof TypeError)
+      ) {
+        // console.log("Print error that is not just invalid URL");
+        throw error;
+      }
+    }
+  }
+
+  return subdirHTMLArr;
 };
 
 const getSite = async (req, res) => {

@@ -9,9 +9,12 @@ const {
   deleteSite,
 } = require("../controllers/controller_sites");
 
+const { getTermAnalysis } = require("../controllers/term_analysis");
+
 router.get("/", getAllSites);
-router.post("/", createSite);
+router.get("/search", getTermAnalysis);
 router.get("/:id", getSite);
+router.post("/", createSite);
 router.patch("/:id", updateSite);
 router.delete("/:id", deleteSite);
 
