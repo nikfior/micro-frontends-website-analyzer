@@ -5,7 +5,7 @@ var wordpos = new WordPOS();
 
 const getTermAnalysis = async (req, res) => {
   const url = req.query.url;
-  // ---------------------------------------------use Set to remove duplicates
+  // ---------------------------------------------use Set to remove duplicates; check for title, not only text
   try {
     const site = await DB_Model_Sites.findOne({ url: url });
     if (!site) {
@@ -27,6 +27,7 @@ const extractTerms = async (html) => {
   const dom = parse(html);
   const nodeList = dom.querySelectorAll("h1,h2,h3,p,button,a");
 
+  let id = 0;
   let dirNode = [];
   for (const node of nodeList) {
     let nodeTerms = [];
@@ -38,7 +39,13 @@ const extractTerms = async (html) => {
       nodeTerms = [...nodeTerms, ...synonyms];
     }
     let uniqNodeTerms = [...new Set(nodeTerms)];
-    dirNode.push({ node: node.tagName, terms: uniqNodeTerms }); // -------------------------change what to save from the node
+    dirNode.push({
+      node: node.tagName,
+      id: id,
+      text: node.textContent,
+      terms: uniqNodeTerms,
+    }); // -------------------------change what to save from the node
+    id = id + 1;
   }
   return dirNode;
   // const html = await axios.get("http://example.com");

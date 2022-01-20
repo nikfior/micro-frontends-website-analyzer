@@ -14,6 +14,9 @@ const githubLogin = async (req, res) => {
 const githubLoginCallback = async (req, res) => {
   try {
     const code = req.query.code;
+    if (!code) {
+      return res.status(401).json({ msg: "Unauthorized" });
+    }
     const access_token = await getAccessToken({
       code,
       client_id: process.env.GITHUB_CLIENT_ID,

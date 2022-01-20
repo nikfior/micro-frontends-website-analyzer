@@ -10,6 +10,7 @@ const cookieSession = require("cookie-session");
 
 // middleware
 app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
 app.use(
   cookieSession({
     name: "app_session",

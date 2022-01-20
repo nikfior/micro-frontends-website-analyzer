@@ -9,6 +9,8 @@ const {
   deleteSite,
 } = require("../controllers/controller_sites");
 
+const { sessionCheck } = require("../middlewares/check_session");
+
 const { getTermAnalysis } = require("../controllers/term_analysis");
 
 router.get("/", getAllSites);

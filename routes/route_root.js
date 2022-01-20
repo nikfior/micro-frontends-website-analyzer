@@ -11,7 +11,7 @@ const {
 
 router.get("/", home);
 router.get("/admin", sessionCheck, adminPanel);
-router.get("/logout", sessionCheck, logoutUser);
+router.get("/logout", logoutUser);
 router.get("/login/github", githubLogin);
 router.get("/login/github/callback", githubLoginCallback);
 

@@ -7,10 +7,10 @@ const sessionCheck = async (req, res, next) => {
   }
   try {
     const userDB = await DB_Model_Users.findById(userIdCookie);
-    if (!userDB) {
-      return res.status(401).json({ msg: "Unauthorized" }); // logged out. no cookie // no such user
+    if (userDB._id.toString() === userIdCookie) {
+      return next();
     }
-    next();
+    return res.status(401).json({ msg: "Unauthorized" }); // no such user
   } catch (error) {
     res.status(500).json({ msg: error.name });
   }
