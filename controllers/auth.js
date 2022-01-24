@@ -1,13 +1,20 @@
 const DB_Model_Users = require("../db/Model_Users");
 const axios = require("axios");
+const jwt = require("jsonwebtoken");
 
 const githubLogin = async (req, res) => {
   try {
-    res.redirect(
+    const frontendRedirectCallback = req.query.frontend_redirect_callback;
+    if (frontendRedirectCallback) {
+      res.cookie("frontendRedirectCallback", frontendRedirectCallback, {
+        signed: true,
+      });
+    }
+    return res.redirect(
       `https://github.com/login/oauth/authorize?client_id=${process.env.GITHUB_CLIENT_ID}&redirect_uri=${process.env.GITHUB_REDIRECT_URL}`
     );
   } catch (error) {
-    res.status(500).json({ msg: error.name });
+    return res.status(500).json({ msg: error.message });
   }
 };
 
@@ -17,6 +24,7 @@ const githubLoginCallback = async (req, res) => {
     if (!code) {
       return res.status(401).json({ msg: "Unauthorized" });
     }
+
     const access_token = await getAccessToken({
       code,
       client_id: process.env.GITHUB_CLIENT_ID,
@@ -24,27 +32,38 @@ const githubLoginCallback = async (req, res) => {
     });
 
     const user = await getGithubUser(access_token);
-    if (user) {
-      req.session.githubId = user.data.id.toString();
-
-      const userDB = await DB_Model_Users.findOneAndUpdate(
-        { githubId: user.data.id },
-        {
-          accessToken: access_token,
-        },
-        { new: true, upsert: true }
-      );
-
-      // const dataDB = await DB_Model_Users.create({});
-
-      req.session.id = userDB._id;
-
-      res.redirect("/admin");
-    } else {
-      res.send("Login did not succeed!");
+    if (!user) {
+      return res.status(401).json({ msg: "Login did not succeed!" });
     }
+
+    const userDB = await DB_Model_Users.findOneAndUpdate(
+      { githubId: user.id },
+      {
+        accessToken: access_token,
+      },
+      { new: true, upsert: true }
+    );
+
+    const frontendRedirectCallback = req.signedCookies.frontendRedirectCallback;
+    res.clearCookie("frontendRedirectCallback");
+
+    // For keeping Frontend session
+    const jwttoken = jwt.sign(
+      { githubId: user.id.toString(), id: userDB._id },
+      process.env.COOKIE_JWT_SECRET
+    );
+
+    // For keeping API session
+    res.cookie("jwttoken", jwttoken, { signed: true, maxAge: 1000 * 60 * 60 * 24 * 30 });
+
+    if (frontendRedirectCallback) {
+      res.set("Custom-Authorization", jwttoken); // ---------------
+      return res.redirect(`${frontendRedirectCallback}?jwttoken=${jwttoken}`);
+    }
+
+    return res.redirect("/login/success");
   } catch (error) {
-    res.status(500).json({ msg: error.message });
+    return res.status(500).json({ msg: error.message });
   }
 };
 
@@ -72,10 +91,22 @@ const getGithubUser = async (token) => {
       Authorization: "bearer " + token,
     },
   });
-  return response;
+  return response.data;
+};
+
+const getToken = (req, res) => {
+  // CHANGE
+  const jwttoken = req.signedCookies.jwttoken;
+
+  if (jwttoken) {
+    res.set("Custom-Authorization", jwttoken);
+    return res.status(200).json({ msg: "Success" });
+  }
+  return res.status(401).json({ msg: "Please sign in" }); // Should be unreachable
 };
 
 module.exports = {
   githubLogin,
   githubLoginCallback,
+  getToken,
 };

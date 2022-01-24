@@ -1,13 +1,27 @@
 const DB_Model_Users = require("../db/Model_Users");
+const jwt = require("jsonwebtoken");
 
 const sessionCheck = async (req, res, next) => {
-  const userIdCookie = req.session.id;
-  if (!userIdCookie) {
-    return res.status(401).json({ msg: "Unauthorized" }); // logged out. no cookie
+  const jwttoken = req.get("Custom-Authorization") || req.signedCookies.jwttoken;
+
+  if (!jwttoken) {
+    return res.status(401).json({ msg: "Unauthorized" });
   }
+
+  let userId;
   try {
-    const userDB = await DB_Model_Users.findById(userIdCookie);
-    if (userDB._id.toString() === userIdCookie) {
+    userId = jwt.verify(jwttoken, process.env.COOKIE_JWT_SECRET).id;
+  } catch (error) {
+    return res.status(401).json(error.message); // invalid jwt
+  }
+
+  if (!userId) {
+    return res.status(401).json({ msg: "Unauthorized" }); // logged out. no cookie or jwt
+  }
+
+  try {
+    const userDB = await DB_Model_Users.findById(userId);
+    if (userDB._id.toString() === userId) {
       return next();
     }
     return res.status(401).json({ msg: "Unauthorized" }); // no such user

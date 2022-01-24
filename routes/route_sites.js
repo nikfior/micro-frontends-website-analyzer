@@ -13,12 +13,12 @@ const { sessionCheck } = require("../middlewares/check_session");
 
 const { getTermAnalysis } = require("../controllers/term_analysis");
 
-router.get("/", getAllSites);
-router.get("/search", getTermAnalysis);
-router.get("/:id", getSite);
-router.post("/", createSite);
-router.patch("/:id", updateSite);
-router.delete("/:id", deleteSite);
+router.get("/", sessionCheck, getAllSites);
+router.get("/search", sessionCheck, getTermAnalysis);
+router.get("/:id", sessionCheck, getSite);
+router.post("/", sessionCheck, createSite);
+router.patch("/:id", sessionCheck, updateSite);
+router.delete("/:id", sessionCheck, deleteSite);
 
 // router.route("/").get(getAllSites).post(createSite);
 // router.route("/:id").get(getSite).patch(updateSite).delete(deleteSite);
