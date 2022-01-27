@@ -1,15 +1,18 @@
 const DB_Model_Sites = require("../db/Model_Site");
 const { parse } = require("node-html-parser");
+const as = require("wink-nlp/src/as.js");
 var WordPOS = require("wordpos");
 var wordpos = new WordPOS();
 
 const getTermAnalysis = async (req, res) => {
   const url = req.query.url;
   // ---------------------------------------------use Set to remove duplicates; check for title, not only text
+  // chech for case when there is no such url to analyze
+  // at the end save the analysis in the db and here at the beginning check if it exists in the db first and if it doesn't then execute it and save it in the db then
   try {
     const site = await DB_Model_Sites.findOne({ url: url });
     if (!site) {
-      return null;
+      return null; // -----------------
     }
 
     let nodesDirArr = []; // each index is a site directory
@@ -17,11 +20,21 @@ const getTermAnalysis = async (req, res) => {
       nodesDirArr.push(await extractTerms(html));
     }
 
-    res.json({ nodes: nodesDirArr });
+    // Bow
+    const allDirsTerms = nodesDirArr.map((subd) => {
+      return subd.map((node) => node.terms);
+    });
+    const allDirsBow = as.bow(allDirsTerms.flat(10));
+
+    res.json({ nodes: nodesDirArr, allDirsBow });
   } catch (error) {
     console.log(error);
   }
 };
+
+// {nodes:[ [{node:...,id:...},{node:...},...], [{node:...},{node:...},...], ... ] }
+//                                         ^                            ^         nodes of a subdir
+//                                                                            ^     subdirs
 
 const extractTerms = async (html) => {
   const dom = parse(html);

@@ -26,7 +26,7 @@ const sessionCheck = async (req, res, next) => {
     }
     return res.status(401).json({ msg: "Unauthorized" }); // no such user
   } catch (error) {
-    res.status(500).json({ msg: error.name });
+    res.status(500).json({ msg: error.message });
   }
 };
 

@@ -9,7 +9,7 @@ const getAllSites = async (req, res) => {
     const sites = await DB_Model_Sites.find({});
     res.status(200).json({ sites });
   } catch (error) {
-    res.status(500).json({ msg: error.name });
+    res.status(500).json({ msg: error.message });
   }
 };
 
@@ -29,7 +29,7 @@ const createSite = async (req, res) => {
     });
     res.status(201).json({ site });
   } catch (error) {
-    res.status(500).json({ msg: error.name });
+    res.status(500).json({ msg: error.message });
   }
 };
 
@@ -62,23 +62,22 @@ const getSite = async (req, res) => {
     }
     res.status(200).json({ site });
   } catch (error) {
-    res.status(500).json({ msg: error.name });
+    res.status(500).json({ msg: error.message });
   }
 };
 
 const updateSite = async (req, res) => {
   try {
-    const site = await DB_Model_Sites.findOneAndUpdate(
-      { _id: req.params.id },
-      req.body,
-      { new: true, runValidators: true }
-    );
+    const site = await DB_Model_Sites.findOneAndUpdate({ _id: req.params.id }, req.body, {
+      new: true,
+      runValidators: true,
+    });
     if (!site) {
       return res.status(404).json({ msg: `No site with id: ${req.params.id}` });
     }
     res.status(200).json({ site });
   } catch (error) {
-    res.status(500).json({ msg: error.name });
+    res.status(500).json({ msg: error.message });
   }
 };
 
@@ -90,7 +89,7 @@ const deleteSite = async (req, res) => {
     }
     res.status(200).json({ site });
   } catch (error) {
-    res.status(500).json({ msg: error.name });
+    res.status(500).json({ msg: error.message });
   }
 };
 
