@@ -13,6 +13,15 @@ const getAllSites = async (req, res) => {
   }
 };
 
+const getAllSitesUrls = async (req, res) => {
+  try {
+    const sites = await DB_Model_Sites.find({}, "_id url");
+    res.status(200).json({ sites });
+  } catch (error) {
+    res.status(500).json({ msg: error.message });
+  }
+};
+
 const createSite = async (req, res) => {
   try {
     // fetch and parse
@@ -38,6 +47,12 @@ const crawler = async (dom) => {
   let subdirHTMLArr = [];
   for (let node of subdirs) {
     try {
+      // TODO make the relative paths, absolute
+      // let html = await axios.get(
+      //   node.getAttribute("href").startsWith("/")
+      //     ? "https://www.polar.com" + node.getAttribute("href")
+      //     : node.getAttribute("href")
+      // );
       let html = await axios.get(node.getAttribute("href"));
       subdirHTMLArr.push(html.data);
     } catch (error) {
@@ -46,6 +61,7 @@ const crawler = async (dom) => {
         !(error instanceof TypeError)
       ) {
         // console.log("Print error that is not just invalid URL");
+        // TODO to check more
         throw error;
       }
     }
@@ -95,6 +111,7 @@ const deleteSite = async (req, res) => {
 
 module.exports = {
   getAllSites,
+  getAllSitesUrls,
   createSite,
   getSite,
   updateSite,

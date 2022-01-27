@@ -1,5 +1,5 @@
 const loginSuccess = async (req, res) => {
-  res.send("You are logged in");
+  res.status(200).json({ msg: "Success" });
 };
 
 const logoutUser = (req, res) => {

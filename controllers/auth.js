@@ -48,10 +48,7 @@ const githubLoginCallback = async (req, res) => {
     res.clearCookie("frontendRedirectCallback");
 
     // For keeping Frontend session
-    const jwttoken = jwt.sign(
-      { githubId: user.id.toString(), id: userDB._id },
-      process.env.COOKIE_JWT_SECRET
-    );
+    const jwttoken = jwt.sign({ id: userDB._id }, process.env.COOKIE_JWT_SECRET);
 
     // For keeping API session
     res.cookie("jwttoken", jwttoken, { signed: true, maxAge: 1000 * 60 * 60 * 24 * 30 });
@@ -94,19 +91,7 @@ const getGithubUser = async (token) => {
   return response.data;
 };
 
-const getToken = (req, res) => {
-  // CHANGE
-  const jwttoken = req.signedCookies.jwttoken;
-
-  if (jwttoken) {
-    res.set("Custom-Authorization", jwttoken);
-    return res.status(200).json({ msg: "Success" });
-  }
-  return res.status(401).json({ msg: "Please sign in" }); // Should be unreachable
-};
-
 module.exports = {
   githubLogin,
   githubLoginCallback,
-  getToken,
 };
