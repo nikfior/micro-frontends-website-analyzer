@@ -29,12 +29,13 @@ const createSite = async (req, res) => {
     // console.log(html.status);
     // console.log(html.data);
     const dom = parse(html.data);
-    const subDirs = await crawler(dom);
+    const [subdirsName, subDirs] = await crawler(dom, req.body.url);
     subDirs.unshift(html.data);
 
     const site = await DB_Model_Sites.create({
       url: req.body.url,
       html: subDirs,
+      subdirsname: subdirsName,
     });
     res.status(201).json({ site });
   } catch (error) {
@@ -42,19 +43,27 @@ const createSite = async (req, res) => {
   }
 };
 
-const crawler = async (dom) => {
+const crawler = async (dom, url) => {
   const subdirs = dom.querySelectorAll("a");
   let subdirHTMLArr = [];
+  let subdirsName = ["/"];
   for (let node of subdirs) {
     try {
-      // TODO make the relative paths, absolute
-      // let html = await axios.get(
-      //   node.getAttribute("href").startsWith("/")
-      //     ? "https://www.polar.com" + node.getAttribute("href")
-      //     : node.getAttribute("href")
-      // );
-      let html = await axios.get(node.getAttribute("href"));
+      // makes the relative paths, absolute
+      const subdirname = node.getAttribute("href").startsWith("/")
+        ? node.getAttribute("href").endsWith("/")
+          ? url + node.getAttribute("href").slice(1)
+          : url + node.getAttribute("href")
+        : node.getAttribute("href");
+      let html = await axios.get(subdirname);
+
+      // let html = await axios.get(node.getAttribute("href"));
       subdirHTMLArr.push(html.data);
+      subdirsName.push(subdirname);
+      // keep only the relative path
+      // subdirsName.push(
+      //   url.endsWith("/") ? subdirname.slice(url.length - 1) : subdirname.slice(url.length)
+      // );
     } catch (error) {
       if (
         error.message != "Cannot read property 'replace' of null" ||
@@ -67,7 +76,7 @@ const crawler = async (dom) => {
     }
   }
 
-  return subdirHTMLArr;
+  return [subdirsName, subdirHTMLArr];
 };
 
 const getSite = async (req, res) => {

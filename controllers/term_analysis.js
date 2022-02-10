@@ -26,7 +26,7 @@ const getTermAnalysis = async (req, res) => {
     });
     const allDirsBow = as.bow(allDirsTerms.flat(10));
 
-    res.json({ nodes: nodesDirArr, allDirsBow });
+    res.json({ subdirsname: site.subdirsname, nodes: nodesDirArr, allDirsBow });
   } catch (error) {
     // console.log(error);
     res.status(500).json({ msg: error.message });
