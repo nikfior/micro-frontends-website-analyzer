@@ -1,18 +1,23 @@
 const DB_Model_Sites = require("../db/Model_Site");
 const { parse } = require("node-html-parser");
+const model = require("wink-eng-lite-model");
+const nlp = require("wink-nlp")(model);
+const its = require("wink-nlp/src/its.js");
 const as = require("wink-nlp/src/as.js");
+const BM25Vectorizer = require("wink-nlp/utilities/bm25-vectorizer");
 var WordPOS = require("wordpos");
 var wordpos = new WordPOS();
 
 const getTermAnalysis = async (req, res) => {
-  const url = req.query.url;
-  // ---------------------------------------------use Set to remove duplicates; check for title, not only text
-  // chech for case when there is no such url to analyze
-  // at the end save the analysis in the db and here at the beginning check if it exists in the db first and if it doesn't then execute it and save it in the db then
+  const bm25 = BM25Vectorizer();
+  const sanitizedId = req.query.id.toString().replace(/\$/g, "");
+  // ---------------------------------------------TODO use Set to remove duplicates; check for title, not only text
+  // save the analysis in the db and here at the beginning check if it exists in the db first and if it doesn't then execute it and save it in the db then
+  // maybe even it analyzes for first time add loading animation and say it might take a while
   try {
-    const site = await DB_Model_Sites.findOne({ url: url });
+    const site = await DB_Model_Sites.findById(sanitizedId);
     if (!site) {
-      return null; // -----------------
+      return res.status(404).json({ msg: "Site not found for analysis. Please add site first" });
     }
 
     let nodesDirArr = []; // each index is a site directory
@@ -20,16 +25,33 @@ const getTermAnalysis = async (req, res) => {
       nodesDirArr.push(await extractTerms(html));
     }
 
+    // bm25
+    const termsPerSubd = nodesDirArr.map((subd) => {
+      const subdTerms = subd.map((node) => node.terms);
+      return subdTerms.flat(10).join(" ");
+    });
+    termsPerSubd.forEach((doc) => bm25.learn(nlp.readDoc(doc).tokens().out(its.normal)));
+    const bm25Matrix = termsPerSubd.map((subd) => {
+      return bm25.vectorOf(nlp.readDoc(subd).tokens().out(its.normal));
+    });
+    const bm25Terms = bm25.out(its.terms);
+
     // Bow
     const allDirsTerms = nodesDirArr.map((subd) => {
       return subd.map((node) => node.terms);
     });
     const allDirsBow = as.bow(allDirsTerms.flat(10));
 
-    res.json({ subdirsname: site.subdirsname, nodes: nodesDirArr, allDirsBow });
+    return res.json({
+      subdirsname: site.subdirsname,
+      nodes: nodesDirArr,
+      allDirsBow,
+      bm25Matrix,
+      bm25Terms,
+    });
   } catch (error) {
     // console.log(error);
-    res.status(500).json({ msg: error.message });
+    return res.status(500).json({ msg: error.message });
   }
 };
 

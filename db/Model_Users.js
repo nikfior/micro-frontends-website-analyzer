@@ -9,6 +9,10 @@ const UserSchema = new mongoose.Schema({
     type: String,
     required: [true, "Github Id not provided"],
   },
+  githubUsername: {
+    type: String,
+    required: [true, "Github username missing"],
+  },
 });
 
 module.exports = mongoose.model("User", UserSchema);

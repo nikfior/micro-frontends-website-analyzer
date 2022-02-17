@@ -21,7 +21,8 @@ const sessionCheck = async (req, res, next) => {
 
   try {
     const userDB = await DB_Model_Users.findById(userId);
-    if (userDB._id.toString() === userId) {
+    if (userDB && userDB._id.toString() === userId) {
+      req.middlewareUserId = userDB._id;
       return next();
     }
     return res.status(401).json({ msg: "Unauthorized" }); // no such user

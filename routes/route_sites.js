@@ -3,7 +3,7 @@ const router = express.Router();
 
 const {
   getAllSites,
-  getAllSitesUrls,
+  getMenu,
   createSite,
   getSite,
   updateSite,
@@ -15,8 +15,8 @@ const { sessionCheck } = require("../middlewares/check_session");
 const { getTermAnalysis } = require("../controllers/term_analysis");
 
 router.get("/", sessionCheck, getAllSites);
-router.get("/getUrls", sessionCheck, getAllSitesUrls);
-router.get("/search", sessionCheck, getTermAnalysis);
+router.get("/getMenu", sessionCheck, getMenu);
+router.get("/analysis", sessionCheck, getTermAnalysis);
 router.get("/:id", sessionCheck, getSite);
 router.post("/", sessionCheck, createSite);
 router.patch("/:id", sessionCheck, updateSite);

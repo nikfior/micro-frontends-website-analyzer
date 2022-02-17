@@ -38,9 +38,7 @@ const githubLoginCallback = async (req, res) => {
 
     const userDB = await DB_Model_Users.findOneAndUpdate(
       { githubId: user.id },
-      {
-        accessToken: access_token,
-      },
+      { githubUsername: user.login, accessToken: access_token },
       { new: true, upsert: true }
     );
 

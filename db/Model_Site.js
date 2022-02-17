@@ -6,6 +6,10 @@ const TaskSchema = new mongoose.Schema({
     required: [true, "You must provide a url"],
     trim: true,
   },
+  creationDate: {
+    type: Date,
+    required: [true, "Error creating date"],
+  },
   subdirsname: {
     type: Array,
     required: [true, "html data must be provided"],

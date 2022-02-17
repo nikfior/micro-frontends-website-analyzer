@@ -1,4 +1,5 @@
 const DB_Model_Sites = require("../db/Model_Site");
+const DB_Model_Users = require("../db/Model_Users");
 const axios = require("axios");
 const { parse } = require("node-html-parser");
 // const jsdom = require("jsdom");
@@ -13,10 +14,11 @@ const getAllSites = async (req, res) => {
   }
 };
 
-const getAllSitesUrls = async (req, res) => {
+const getMenu = async (req, res) => {
   try {
-    const sites = await DB_Model_Sites.find({}, "_id url");
-    res.status(200).json({ sites });
+    const sites = await DB_Model_Sites.find({}, "_id url creationDate");
+    const userDB = await DB_Model_Users.findById(req.middlewareUserId);
+    res.status(200).json({ sites, username: userDB.githubUsername });
   } catch (error) {
     res.status(500).json({ msg: error.message });
   }
@@ -36,6 +38,7 @@ const createSite = async (req, res) => {
       url: req.body.url,
       html: subDirs,
       subdirsname: subdirsName,
+      creationDate: new Date(),
     });
     res.status(201).json({ site });
   } catch (error) {
@@ -49,12 +52,16 @@ const crawler = async (dom, url) => {
   let subdirsName = ["/"];
   for (let node of subdirs) {
     try {
+      // console.log(node.getAttribute("href"));
+      // TODO
+      if (!node.getAttribute("href").startsWith("/")) {
+        continue;
+      }
       // makes the relative paths, absolute
-      const subdirname = node.getAttribute("href").startsWith("/")
-        ? node.getAttribute("href").endsWith("/")
-          ? url + node.getAttribute("href").slice(1)
-          : url + node.getAttribute("href")
-        : node.getAttribute("href");
+      const subdirname = new URL(node.getAttribute("href"), url).href;
+      // const subdirname = node.getAttribute("href").startsWith("/")
+      //   ? url + node.getAttribute("href")
+      //   : node.getAttribute("href");
       let html = await axios.get(subdirname);
 
       // let html = await axios.get(node.getAttribute("href"));
@@ -81,9 +88,12 @@ const crawler = async (dom, url) => {
 
 const getSite = async (req, res) => {
   try {
-    const site = await DB_Model_Sites.findOne({ _id: req.params.id });
+    const sanitizedId = req.params.id.toString().replace(/\$/g, "");
+    const site = await DB_Model_Sites.findOne({
+      _id: sanitizedId,
+    });
     if (!site) {
-      return res.status(404).json({ msg: `No site with id: ${req.params.id}` });
+      return res.status(404).json({ msg: `No site with id: ${sanitizedId}` });
     }
     res.status(200).json({ site });
   } catch (error) {
@@ -93,12 +103,13 @@ const getSite = async (req, res) => {
 
 const updateSite = async (req, res) => {
   try {
-    const site = await DB_Model_Sites.findOneAndUpdate({ _id: req.params.id }, req.body, {
+    const sanitizedId = req.params.id.toString().replace(/\$/g, "");
+    const site = await DB_Model_Sites.findOneAndUpdate({ _id: sanitizedId }, req.body, {
       new: true,
       runValidators: true,
     });
     if (!site) {
-      return res.status(404).json({ msg: `No site with id: ${req.params.id}` });
+      return res.status(404).json({ msg: `No site with id: ${sanitizedId}` });
     }
     res.status(200).json({ site });
   } catch (error) {
@@ -108,9 +119,10 @@ const updateSite = async (req, res) => {
 
 const deleteSite = async (req, res) => {
   try {
-    const site = await DB_Model_Sites.findOneAndDelete({ _id: req.params.id });
+    const sanitizedId = req.params.id.toString().replace(/\$/g, "");
+    const site = await DB_Model_Sites.findOneAndDelete({ _id: sanitizedId });
     if (!site) {
-      return res.status(404).json({ msg: `No site with id: ${req.params.id}` });
+      return res.status(404).json({ msg: `No site with id: ${sanitizedId}` });
     }
     res.status(200).json({ site });
   } catch (error) {
@@ -120,7 +132,7 @@ const deleteSite = async (req, res) => {
 
 module.exports = {
   getAllSites,
-  getAllSitesUrls,
+  getMenu,
   createSite,
   getSite,
   updateSite,
