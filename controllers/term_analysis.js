@@ -1,4 +1,5 @@
 const DB_Model_Sites = require("../db/Model_Site");
+const DB_Model_Analysis = require("../db/Model_TermAnalysis");
 const { parse } = require("node-html-parser");
 const model = require("wink-eng-lite-model");
 const nlp = require("wink-nlp")(model);
@@ -7,9 +8,11 @@ const as = require("wink-nlp/src/as.js");
 const BM25Vectorizer = require("wink-nlp/utilities/bm25-vectorizer");
 var WordPOS = require("wordpos");
 var wordpos = new WordPOS();
+const natural = require("natural");
+const TfIdf = natural.TfIdf;
+const bm25 = BM25Vectorizer();
 
 const getTermAnalysis = async (req, res) => {
-  const bm25 = BM25Vectorizer();
   const sanitizedId = req.query.id.toString().replace(/\$/g, "");
   // ---------------------------------------------TODO use Set to remove duplicates; check for title, not only text
   // save the analysis in the db and here at the beginning check if it exists in the db first and if it doesn't then execute it and save it in the db then
@@ -18,6 +21,11 @@ const getTermAnalysis = async (req, res) => {
     const site = await DB_Model_Sites.findById(sanitizedId);
     if (!site) {
       return res.status(404).json({ msg: "Site not found for analysis. Please add site first" });
+    }
+
+    const dbAnalysis = await DB_Model_Analysis.findById(sanitizedId);
+    if (dbAnalysis) {
+      return res.json(dbAnalysis);
     }
 
     let nodesDirArr = []; // each index is a site directory
@@ -36,11 +44,47 @@ const getTermAnalysis = async (req, res) => {
     });
     const bm25Terms = bm25.out(its.terms);
 
+    // bm25 with nodes
+    let tfidfFunMatrix = [];
+    let tfidfNodesMatrix = [];
+    nodesDirArr.forEach((subd) => {
+      const tfidf = new TfIdf();
+      subd.forEach((node) => tfidf.addDocument(node.terms.join(" ")));
+      tfidfFunMatrix.push(tfidf);
+      tfidfNodesMatrix.push([]);
+    });
+    nodesDirArr.forEach((subd, index) => {
+      subd.forEach((node) => {
+        let sum = 0;
+        tfidfFunMatrix[index].tfidfs(node.terms.join(" "), function (i, measure) {
+          // console.log('document #' + i + ' is ' + measure);
+          // tfidfNodesMatrix[index].push(measure);
+          sum = sum + measure;
+        });
+        tfidfNodesMatrix[index].push(sum);
+      });
+    });
+
     // Bow
     const allDirsTerms = nodesDirArr.map((subd) => {
       return subd.map((node) => node.terms);
     });
     const allDirsBow = as.bow(allDirsTerms.flat(10));
+
+    const savedAnalysis = await DB_Model_Analysis.findByIdAndUpdate(
+      sanitizedId,
+      {
+        analysis: {
+          subdirsname: site.subdirsname,
+          nodes: nodesDirArr,
+          allDirsBow,
+          bm25Matrix,
+          bm25Terms,
+          tfidfNodesMatrix,
+        },
+      },
+      { new: true, upsert: true }
+    );
 
     return res.json({
       subdirsname: site.subdirsname,
@@ -48,6 +92,7 @@ const getTermAnalysis = async (req, res) => {
       allDirsBow,
       bm25Matrix,
       bm25Terms,
+      tfidfNodesMatrix,
     });
   } catch (error) {
     // console.log(error);

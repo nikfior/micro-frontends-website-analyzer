@@ -9,9 +9,42 @@ const logoutUser = (req, res) => {
 
 // const its = require("wink-nlp/src/its.js");
 // const model = require("wink-eng-lite-model");
-// var nlpu = require("wink-nlp-utils");
 // const { parse } = require("node-html-parser");
 const home = (req, res) => {
+  // const { Worker } = require("worker_threads");
+  // function callWorkerThread() {
+  //   const worker = new Worker("./controllers/workers/worker_termAnalysis.js");
+  //   // Set worker thread event handlers
+  //   worker.on("message", (result) => {
+  //     console.log(`Outcome in Parent Thread : ${result}`);
+  //     // Delaying the termination of the worker for testing event set in inside it.
+  //     setTimeout(() => {
+  //       worker.terminate();
+  //     }, 500);
+  //   });
+
+  //   worker.on("exit", (code) => {
+  //     console.log(`worker exited with code ${code}`);
+  //   });
+  //   // Post message to the worker thread.
+  //   worker.postMessage({ command: "SLEEP" });
+  // }
+  // callWorkerThread();
+  // setTimeout(() => {
+  //   console.log(
+  //     "\nTest Parent Event-Loop :cpuIntensiveTask in child thread does not block this event in parent thread!"
+  //   );
+  // }, 1000);
+
+  // ---------------------
+  // await new Promise((r) => {
+  //   setTimeout(async () => {
+  //     msg = "Okk222";
+  //     const html = await axios.get(req.body.url);
+  //     r();
+  //   }, 300000);
+  // });
+
   // console.log(req.query);
   // const a = `<a class="top-level" href="/en/products" onclick="ga('send', 'event', 'Mega Menu', 'Products', 'Products');">Products</a>`;
   // const dom = parse(a);
@@ -20,6 +53,7 @@ const home = (req, res) => {
   // var tfidf = new TfIdf();
   // const sub = dom.querySelector("a");
   // console.log(sub.toString());
+  // -----
   // const model = require("wink-eng-lite-model");
   // const its = require("wink-nlp/src/its.js");
   // const as = require("wink-nlp/src/as.js");
@@ -33,14 +67,17 @@ const home = (req, res) => {
   // tfidf.addDocument("J Bach");
   // tfidf.addDocument("Johann S Bach");
   // tfidf.addDocument("Johann Sebastian Bach symphony");
+  // const text = "Johann Sebastian Bach symphony";
+  // const textar = ["Johann", "Sebastian", "Bach", "symphony"];
   // const doc = nlp.readDoc(text);
   // const doc2 = nlp.readDoc(text2.join(" "));
   // console.log(doc.tokens().out(its.type, as.freqTable));
+  // console.log(its.normal(textar));
   // console.log("empty", doc.tokens().out());
   // console.log("as.freqtable", doc.tokens().out(its.type, as.freqTable));
   // const tok = doc.tokens().out();
   // corpus.forEach((doc) => bm25.learn(nlp.readDoc(doc).tokens().out(its.normal)));
-  // console.log(bm25.vectorOf(nlp.readDoc("Johann Bach symphony").tokens().out(its.normal)));
+  // console.log(bm25.vectorOf(nlp.readDoc("Johann S").tokens().out(its.normal)));
   // console.log(bm25.out());
   // console.log(nlp.readDoc("Johann Bach symphony").tokens().out(its.normal));
   // console.log(bm25.out(its.terms));
