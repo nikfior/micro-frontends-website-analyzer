@@ -1,8 +1,8 @@
 const mongoose = require("mongoose");
 
 const AnalysisSchema = new mongoose.Schema({
-  siteId: {
-    type: mongoose.ObjectId,
+  datasetSiteId: {
+    type: String,
   },
   analysis: Object,
 });

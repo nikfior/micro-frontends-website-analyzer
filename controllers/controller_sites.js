@@ -53,7 +53,7 @@ const crawler = async (dom, url) => {
   for (let node of subdirs) {
     try {
       // console.log(node.getAttribute("href"));
-      // TODO
+      // TODO also check if it is absolute and starts with the site url
       if (!node.getAttribute("href").startsWith("/")) {
         continue;
       }

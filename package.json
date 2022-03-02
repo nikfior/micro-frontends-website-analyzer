@@ -23,6 +23,7 @@
     "start": "node ./app.js",
     "lint": "eslint .",
     "lint:fix": "eslint --fix .",
+    "nodemon": "nodemon ./app.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {

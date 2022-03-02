@@ -28,31 +28,32 @@ const { parentPort } = require("worker_threads");
 
 // -------------------
 
-// function outfun() {
-//   let k = 0;
-//   console.log("starting cpu-heavy");
-//   for (let i = 0; i < 50; i++) {
-//     for (let j = 0; j < 99999999; j++) {
-//       k++;
-//     }
-//   }
-//   console.log("ended cpu-heavy");
-//   return k;
-// }
+function outfun() {
+  let k = 0;
+  console.log("starting cpu-heavy");
+  for (let i = 0; i < 50; i++) {
+    for (let j = 0; j < 99999999; j++) {
+      k++;
+    }
+  }
+  console.log("ended cpu-heavy");
+  return k;
+}
 
-// parentPort.on("message", (message) => {
-//   console.log(message);
-//   if (message.command == "SLEEP") {
-//     setTimeout(() => {
-//       console.log(
-//         "\nTest Child Event-Loop :cpuIntensiveTask in child thread blocks this event in child thread!"
-//       );
-//     }, 1000);
-//     console.log("first");
-//     const result = outfun();
-//     console.log("second");
-//     parentPort.postMessage("in worker found :" + result);
-//     console.log("end");
-//     // process.exit();
-//   }
-// });
+parentPort.on("message", (message) => {
+  console.log("in worker", message);
+  if (message.command == "SLEEP") {
+    setTimeout(() => {
+      console.log(
+        "\nTest Child Event-Loop :cpuIntensiveTask in child thread blocks this event in child thread!"
+      );
+    }, 20000);
+    console.log("first");
+    const result = outfun();
+    console.log("second");
+    parentPort.postMessage("in worker found :" + result);
+    console.log("end");
+    setTimeout(() => process.exit(), 500);
+    // process.exit();
+  }
+});
