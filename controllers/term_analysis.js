@@ -36,15 +36,15 @@ const getTermAnalysis = async (req, res) => {
     }
 
     // bm25
-    const termsPerSubd = nodesDirArr.map((subd) => {
-      const subdTerms = subd.map((node) => node.terms);
-      return subdTerms.flat(10).join(" ");
-    });
-    termsPerSubd.forEach((doc) => bm25.learn(nlp.readDoc(doc).tokens().out(its.normal)));
-    const bm25Matrix = termsPerSubd.map((subd) => {
-      return bm25.vectorOf(nlp.readDoc(subd).tokens().out(its.normal));
-    });
-    const bm25Terms = bm25.out(its.terms);
+    // const termsPerSubd = nodesDirArr.map((subd) => {
+    //   const subdTerms = subd.map((node) => node.terms);
+    //   return subdTerms.flat(10).join(" ");
+    // });
+    // termsPerSubd.forEach((doc) => bm25.learn(nlp.readDoc(doc).tokens().out(its.normal)));
+    // const bm25Matrix = termsPerSubd.map((subd) => {
+    //   return bm25.vectorOf(nlp.readDoc(subd).tokens().out(its.normal));
+    // });
+    // const bm25Terms = bm25.out(its.terms);
 
     // bm25 with nodes
     // let tfidfFunMatrix = [];
@@ -68,10 +68,10 @@ const getTermAnalysis = async (req, res) => {
     // });
 
     // Bow
-    const allDirsTerms = nodesDirArr.map((subd) => {
-      return subd.map((node) => node.terms);
-    });
-    const allDirsBow = as.bow(allDirsTerms.flat(10));
+    // const allDirsTerms = nodesDirArr.map((subd) => {
+    //   return subd.map((node) => node.terms);
+    // });
+    // const allDirsBow = as.bow(allDirsTerms.flat(10));
 
     //
     // cosine similarity
@@ -113,9 +113,9 @@ const getTermAnalysis = async (req, res) => {
         analysis: {
           subdirsname: site.subdirsname,
           nodes: nodesDirArr,
-          allDirsBow,
-          bm25Matrix,
-          bm25Terms,
+          // allDirsBow,
+          // bm25Matrix,
+          // bm25Terms,
           // tfidfNodesMatrix,
           cosineSimilarityPerSubd,
         },
@@ -124,13 +124,15 @@ const getTermAnalysis = async (req, res) => {
     );
 
     return res.json({
-      subdirsname: site.subdirsname,
-      nodes: nodesDirArr,
-      allDirsBow,
-      bm25Matrix,
-      bm25Terms,
-      // tfidfNodesMatrix,
-      cosineSimilarityPerSubd,
+      analysis: {
+        subdirsname: site.subdirsname,
+        nodes: nodesDirArr,
+        // allDirsBow,
+        // bm25Matrix,
+        // bm25Terms,
+        // tfidfNodesMatrix,
+        cosineSimilarityPerSubd,
+      },
     });
   } catch (error) {
     // console.log(error);
