@@ -10,7 +10,49 @@ const logoutUser = (req, res) => {
 // const its = require("wink-nlp/src/its.js");
 // const model = require("wink-eng-lite-model");
 // const { parse } = require("node-html-parser");
-const home = (req, res) => {
+const home = async (req, res) => {
+  // ----------------------
+  const jsdom = require("jsdom");
+  const { JSDOM } = jsdom;
+  const DB_Model_Sites = require("../db/Model_Site");
+  const site = await DB_Model_Sites.findById("6204a5a355c85e13e2f0943f");
+  const test = `<p><a href="https://www.iana.org/domains/example">More information...</a></p>`;
+  // const parse = require("html-dom-parser");
+  const { parse } = require("node-html-parser");
+  const output = parse(site).getElementsByTagName("body")[0];
+
+  const { depth, breadth } = require("treeverse");
+
+  const getChildren = (node) => node.childNodes;
+  const getLabel = (node) => node.tagName;
+  const visit = (node) => {
+    console.log(node.tagName); //, ":", node.text, "end");
+  };
+  breadth({ tree: output, visit, getChildren });
+  // let iterator = new RecursiveIterator(output);
+  // output.getElementsByTagName("h1")[0].setAttribute("cid", "somethingnew");
+  // console.log(output.getElementsByTagName("p")[0].childNodes.length === 0);
+  // console.log(output);
+
+  // res.json({ output });
+  // console.log(parse(test).childNodes[0].childNodes);
+  // --------------
+  // const jsonToDot = require("json-to-dot");
+
+  // const out = jsonToDot({
+  //   foo: ["bar", "buzz"],
+  //   bar: ["foo"],
+  //   norf: ["worble", "buzz"],
+  //   worf: ["worble"],
+  //   fizz: ["buzz"],
+  // });
+  // // console.log(out);
+  // var fromDot = require("ngraph.fromdot");
+  // var twoEdgesGraph = fromDot("digraph G { a -> b }");
+  // console.log(twoEdgesGraph.fire());
+  // console.log(twoEdgesGraph.getNodesCount());
+  // console.log(twoEdgesGraph.on());
+  // console.log(twoEdgesGraph.off());
   // --------------
   // const { Worker } = require("worker_threads");
   // function callWorkerThread() {
@@ -62,7 +104,9 @@ const home = (req, res) => {
   // tfidf.addDocument("Johann S Bach");
   // tfidf.addDocument("Johann Sebastian Bach symphony");
   // const text1 = "Johann Sebastian Bach symphony bach";
-  // const textar = ["Johann", "Sebastian", "Bach", "symphony"];
+  // const textar = ["Johann", "Sebastian", "Bach", "symphony", "Bach"];
+  // const as = require("wink-nlp/src/as.js");
+  // console.log(as.bow(textar).Bach);
   // const doc = nlp.readDoc(text);
   // const doc1 = nlp.readDoc(text1);
   // const t = ["this", "is", "an", "example"];
@@ -117,7 +161,7 @@ const home = (req, res) => {
   // console.log(nlp.readDoc("protocols protocol").tokens().out(its.lemma, as.bow));
   // console.log(nlp.readDoc("running").tokens().out(its.lemma));
   // console.log(nlputils.tokens.removeWords(["tree", "forst", "forest", "tree", "haha", "you"]));
-  // console.log(similarity.bow.cosine({ tree: 1 }, { tree: 1, forest: 1 }));
+  // console.log(similarity.bow.cosine({ tree: 1 }, { tree: 1, forest: 0 }));
   // console.log(similarity.bow.cosine({ tree: 1, forest: 2 }, { forest: 1 }));
 
   // const tok = doc.tokens().out();
