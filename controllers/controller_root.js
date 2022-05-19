@@ -11,24 +11,26 @@ const logoutUser = (req, res) => {
 // const model = require("wink-eng-lite-model");
 // const { parse } = require("node-html-parser");
 const home = async (req, res) => {
+  // console.log(process.env);
   // ----------------------
-  const jsdom = require("jsdom");
-  const { JSDOM } = jsdom;
-  const DB_Model_Sites = require("../db/Model_Site");
-  const site = await DB_Model_Sites.findById("6204a5a355c85e13e2f0943f");
-  const test = `<p><a href="https://www.iana.org/domains/example">More information...</a></p>`;
-  // const parse = require("html-dom-parser");
-  const { parse } = require("node-html-parser");
-  const output = parse(site).getElementsByTagName("body")[0];
+  // const jsdom = require("jsdom");
+  // const { JSDOM } = jsdom;
+  // const DB_Model_Sites = require("../db/Model_Site");
+  // const site = await DB_Model_Sites.findById("6204a5a355c85e13e2f0943f");
+  // const test = `<p><a href="https://www.iana.org/domains/example">More information...</a></p>`;
+  // // const parse = require("html-dom-parser");
+  // const { parse } = require("node-html-parser");
+  // const output = parse(site).getElementsByTagName("body")[0];
 
-  const { depth, breadth } = require("treeverse");
+  // const { depth, breadth } = require("treeverse");
 
-  const getChildren = (node) => node.childNodes;
-  const getLabel = (node) => node.tagName;
-  const visit = (node) => {
-    console.log(node.tagName); //, ":", node.text, "end");
-  };
-  breadth({ tree: output, visit, getChildren });
+  // const getChildren = (node) => node.childNodes;
+  // const getLabel = (node) => node.tagName;
+  // const visit = (node) => {
+  //   console.log(node.tagName); //, ":", node.text, "end");
+  // };
+  // breadth({ tree: output, visit, getChildren });
+
   // let iterator = new RecursiveIterator(output);
   // output.getElementsByTagName("h1")[0].setAttribute("cid", "somethingnew");
   // console.log(output.getElementsByTagName("p")[0].childNodes.length === 0);

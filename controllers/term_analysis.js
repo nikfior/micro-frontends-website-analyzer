@@ -15,6 +15,8 @@ const similarity = require("wink-nlp/utilities/similarity.js");
 const skmeans = require("skmeans");
 const silhouetteCoefficient = require("./silhouette_coefficient");
 const { breadth } = require("treeverse");
+const { writeFileSync, unlinkSync } = require("fs");
+const { spawnSync } = require("child_process");
 
 const getTermAnalysis = async (req, res) => {
   const sanitizedId = req.query.id.toString().replace(/\$/g, "");
@@ -119,12 +121,16 @@ const getTermAnalysis = async (req, res) => {
     const { maxAllres, clusteredBow, nodexnode } = getKmeansNodexNode(nodesDirArr);
     //
 
-    const gspanIn = convertToMiningTreeFormat(domFromAllSubdirs, maxAllres, nodexnode);
-    // console.log(a);
+    const gspanIn = convertToMiningTreeFormat(domFromAllSubdirs, sanitizedId, maxAllres, nodexnode);
+    const gspanOut = pythonGspan(sanitizedId);
+    const dotgraphs = gspanOut.graphs ? gspanOutToDotGraph(gspanOut) : null;
+
     const savedAnalysis = await DB_Model_Analysis.findOneAndUpdate(
       { datasetSiteId: sanitizedId },
       {
         analysis: {
+          dotgraphs,
+          gspanOut,
           gspanIn,
           nodexnode,
           clusteredBow,
@@ -153,7 +159,48 @@ const getTermAnalysis = async (req, res) => {
 //
 //
 
-const convertToMiningTreeFormat = (domFromAllSubdirs, maxAllres, nodexnode) => {
+const gspanOutToDotGraph = (gspanOut) => {
+  const dotgraphs = [];
+
+  for (let line of gspanOut.graphs) {
+    if (line.startsWith("t")) {
+      if (dotgraphs.length > 0) {
+        dotgraphs[dotgraphs.length - 1].push("}");
+      }
+      dotgraphs.push([]);
+      dotgraphs[dotgraphs.length - 1].push("digraph " + line.split(" ")[2] + " {");
+    } else if (line.startsWith("e")) {
+      dotgraphs[dotgraphs.length - 1].push(`${line.split(" ")[1]} -> ${line.split(" ")[2]};`);
+    }
+  }
+  dotgraphs[dotgraphs.length - 1].push("}");
+
+  return dotgraphs;
+};
+
+const pythonGspan = (sanitizedId) => {
+  const pyArgs = ["-m", "gspan_mining", "-s", "2", "-d", "True", sanitizedId + "gspanIn.txt"];
+  const pyProg = spawnSync("python", pyArgs);
+
+  // remove file for gspan after finishing
+  unlinkSync(sanitizedId + "gspanIn.txt");
+
+  // console.log(pyProg.stdout.toString());
+  if (pyProg.stderr.toString().length > 0) {
+    console.log("stderr: ", pyProg.stderr.toString());
+    return "Error Executing Tree mining";
+  }
+  if (pyProg.error) {
+    console.log("python error: ", pyProg.error);
+    return "Error Executing Tree mining";
+  }
+
+  const support = pyProg.stdout.toString().match(/^Support.+$/gm);
+  const graphs = pyProg.stdout.toString().match(/^(t|v|e).+$/gm);
+  return { graphs, support };
+};
+
+const convertToMiningTreeFormat = (domFromAllSubdirs, sanitizedId, maxAllres, nodexnode) => {
   let gspanFormat = [];
   let vertexCounter;
   let i;
@@ -168,6 +215,16 @@ const convertToMiningTreeFormat = (domFromAllSubdirs, maxAllres, nodexnode) => {
     //   "and",
     //   node.getAttribute && node.getAttribute("customId")
     // );
+
+    // if text node is empty then remove it and not show it in gspan format array
+    if (node.nodeType !== 1) {
+      const hasText = /\S/g.test(node.text);
+      if (!hasText) {
+        node.parentNode.removeChild(node);
+        return;
+      }
+    }
+
     let label = node.nodeType === 1 ? node.getAttribute("customId") || "-1" : "-1";
     // label = label ? label : "-1";
     gspanFormat[i].push(`v ${vertexCounter} ${label}`);
@@ -191,6 +248,7 @@ const convertToMiningTreeFormat = (domFromAllSubdirs, maxAllres, nodexnode) => {
   }
 
   gspanFormat[i - 1].push("t # -1");
+  writeFileSync(sanitizedId + "gspanIn.txt", gspanFormat.flat(10).join("\n"));
   return gspanFormat;
 };
 
