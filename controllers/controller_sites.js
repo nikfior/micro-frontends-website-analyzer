@@ -1,7 +1,7 @@
 const DB_Model_Sites = require("../db/Model_Site");
 const DB_Model_Users = require("../db/Model_Users");
-const axios = require("axios");
-const { parse } = require("node-html-parser");
+const { fork } = require("child_process");
+
 // const jsdom = require("jsdom");
 // const { JSDOM } = jsdom;
 
@@ -26,64 +26,15 @@ const getMenu = async (req, res) => {
 
 const createSite = async (req, res) => {
   try {
-    // fetch and parse
-    const html = await axios.get(req.body.url);
-    // console.log(html.status);
-    // console.log(html.data);
-    const dom = parse(html.data);
-    const [subdirsName, subDirs] = await crawler(dom, req.body.url);
-    subDirs.unshift(html.data);
+    const childProcess = fork("./controllers/children/child_createSite");
+    childProcess.send({ url: req.body.url }); // TODO sanitize or check
 
-    const site = await DB_Model_Sites.create({
-      url: req.body.url,
-      html: subDirs,
-      subdirsname: subdirsName,
-      creationDate: new Date(),
-    });
-    res.status(201).json({ site });
+    res
+      .status(201)
+      .json({ msg: "The site is being scraped. The new listing will be shown in the menu when ready" });
   } catch (error) {
     res.status(500).json({ msg: error.message });
   }
-};
-
-const crawler = async (dom, url) => {
-  const subdirs = dom.querySelectorAll("a");
-  let subdirHTMLArr = [];
-  let subdirsName = ["/"];
-  for (let node of subdirs) {
-    try {
-      // console.log(node.getAttribute("href"));
-      // TODO also check if it is absolute and starts with the site url
-      if (!node.getAttribute("href").startsWith("/")) {
-        continue;
-      }
-      // makes the relative paths, absolute
-      const subdirname = new URL(node.getAttribute("href"), url).href;
-      // const subdirname = node.getAttribute("href").startsWith("/")
-      //   ? url + node.getAttribute("href")
-      //   : node.getAttribute("href");
-      let html = await axios.get(subdirname);
-
-      // let html = await axios.get(node.getAttribute("href"));
-      subdirHTMLArr.push(html.data);
-      subdirsName.push(subdirname);
-      // keep only the relative path
-      // subdirsName.push(
-      //   url.endsWith("/") ? subdirname.slice(url.length - 1) : subdirname.slice(url.length)
-      // );
-    } catch (error) {
-      if (
-        error.message != "Cannot read property 'replace' of null" ||
-        !(error instanceof TypeError)
-      ) {
-        // console.log("Print error that is not just invalid URL");
-        // TODO to check more
-        throw error;
-      }
-    }
-  }
-
-  return [subdirsName, subdirHTMLArr];
 };
 
 const getSite = async (req, res) => {

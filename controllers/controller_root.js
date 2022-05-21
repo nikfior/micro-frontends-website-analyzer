@@ -11,17 +11,39 @@ const logoutUser = (req, res) => {
 // const model = require("wink-eng-lite-model");
 // const { parse } = require("node-html-parser");
 const home = async (req, res) => {
+  // const test = `<div><p><a href="https://www.iana.org/domains/example">More information...</a></p><p>secind</p></div><div></div>`;
+  // const { parse } = require("node-html-parser");
+  // const output = parse(test).getElementsByTagName("div")[1];
+  // if (!output.text) {
+  //   console.log("S");
+  // }
+  // console.log("out");
+  // -----------
+  // const distinctColors = require("distinct-colors").default;
+
+  // const palette = distinctColors({ count: 16 });
+  // console.log(palette);
   // console.log(process.env);
   // ----------------------
-  // const jsdom = require("jsdom");
-  // const { JSDOM } = jsdom;
   // const DB_Model_Sites = require("../db/Model_Site");
   // const site = await DB_Model_Sites.findById("6204a5a355c85e13e2f0943f");
-  // const test = `<p><a href="https://www.iana.org/domains/example">More information...</a></p>`;
-  // // const parse = require("html-dom-parser");
+  // // const test = `<p><a href="https://www.iana.org/domains/example">More information...</a></p>`;
+  // // // const parse = require("html-dom-parser");
   // const { parse } = require("node-html-parser");
-  // const output = parse(site).getElementsByTagName("body")[0];
+  // // const output = parse(site).getElementsByTagName("body")[0];
+  // const tt = parse(site.html);
+  // console.log("first", tt.getElementsByTagName("h1")[0].textContent);
+  // tt.getElementsByTagName("h1")[0].textContent = "NEEWWWW";
+  // tt.getElementsByTagName("h1")[0].setAttribute(
+  //   "style",
+  //   "border-style: solid;border-color: #FFAAFF;border-width: thick;"
+  // );
+  // console.log("second", tt.getElementsByTagName("h1")[0].textContent);
+  // // const te = tt.structure;
+  // // console.log(tt.toString());
+  // return res.send(tt.toString());
 
+  //-----
   // const { depth, breadth } = require("treeverse");
 
   // const getChildren = (node) => node.childNodes;
@@ -93,6 +115,8 @@ const home = async (req, res) => {
   // const model = require("wink-eng-lite-model");
   // const its = require("wink-nlp/src/its.js");
   // const as = require("wink-nlp/src/as.js");
+  // const temp = as.bow(["Johann", "tree", "Sebastian", "Bach", "symphony", "Bach", "tree"]);
+  // console.log(temp);
   // const nlp = require("wink-nlp")(model);
   // const BM25Vectorizer = require("wink-nlp/utilities/bm25-vectorizer");
   // const bm25 = BM25Vectorizer();
@@ -150,8 +174,15 @@ const home = async (req, res) => {
   // const bow2 = doc.tokens().out(its.normal, as.bow);
   // console.log(similarity.bow.cosine(bow1, bow2));
   // console.log(similarity.bow.cosine({}, { tree: 1 }));
+  // const as = require("wink-nlp/src/as.js");
   // const nlputils = require("wink-nlp-utils");
-  // console.log(nlputils.tokens.bagOfWords([]));
+  // const start = Date.now();
+  // for (let i = 0; i < 10000; i++) {
+  //   for (let j = 0; j < 20000; j++) {
+  //     const temp = as.bow(["Johann", "tree", "Sebastian", "Bach", "symphony", "Bach", "tree"]);
+  //   }
+  // }
+  // console.log("execution time", Date.now() - start);
   // -------
   // var WordPOS = require("wordpos");
   // var wordpos = new WordPOS();

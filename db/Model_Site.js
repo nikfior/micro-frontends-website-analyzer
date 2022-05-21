@@ -10,6 +10,9 @@ const TaskSchema = new mongoose.Schema({
     type: Date,
     required: [true, "Error creating date"],
   },
+  status: {
+    type: String,
+  },
   subdirsname: {
     type: Array,
     required: [true, "html data must be provided"],

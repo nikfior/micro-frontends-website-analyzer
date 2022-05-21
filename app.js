@@ -28,10 +28,10 @@ app.use(notFound);
 const start = async () => {
   try {
     await connectDB(process.env.MONGO_DB_URI);
-    app.listen(
-      process.env.PORT || 5000,
-      console.log("Server is on port " + (process.env.PORT || 5000) + " ...")
-    );
+    app.listen(process.env.PORT || 5000, async () => {
+      await require("./controllers/children_cleanup").childrenCleanup();
+      console.log("Cleanup done and server listening on port " + (process.env.PORT || 5000) + " ...");
+    });
   } catch (error) {
     console.log(error);
   }

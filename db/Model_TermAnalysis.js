@@ -4,6 +4,7 @@ const AnalysisSchema = new mongoose.Schema({
   datasetSiteId: {
     type: String,
   },
+  status: String,
   analysis: Object,
 });
 
