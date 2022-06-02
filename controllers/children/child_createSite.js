@@ -46,8 +46,11 @@ const crawler = async (htmlData, url) => {
   for (let node of subdirs) {
     try {
       // console.log(node.getAttribute("href"));
-      // TODO also check if it is absolute and starts with the site url
-      if (!node.getAttribute("href").startsWith("/")) {
+      // TODO also check if it is absolute and starts with the site url ALSO CHECK if it is the same url as before
+      if (
+        !node.getAttribute("href") ||
+        (!node.getAttribute("href").startsWith(url) && !node.getAttribute("href").startsWith("/"))
+      ) {
         continue;
       }
       // makes the relative paths, absolute

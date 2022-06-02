@@ -11,6 +11,36 @@ const logoutUser = (req, res) => {
 // const model = require("wink-eng-lite-model");
 // const { parse } = require("node-html-parser");
 const home = async (req, res) => {
+  // const getChildren = (node) => {
+  //   return node.child;
+  // };
+
+  // const visit = (x) => {
+  //   console.log(x.tag);
+  //   return x;
+  // };
+  // const filter = (x) => {
+  //   console.log("filter " + x.tag);
+  //   // if (x.tag === 11) {
+  //   //   return false;
+  //   // }
+  //   return true;
+  // };
+  // const leave = (x, c) => {
+  //   console.log("leave " + x.tag);
+  // };
+
+  // const { depth, breadth } = require("treeverse");
+  // const tree = {
+  //   tag: 0,
+  //   child: [
+  //     { tag: 11, child: [{ tag: 21, child: [{ tag: 31, child: [] }] }] },
+  //     { tag: 12, child: [] },
+  //     { tag: 13, child: [] },
+  //   ],
+  // };
+  // depth({ tree, visit, getChildren, leave });
+  // --------------------------
   // const test = `<div><p><a href="https://www.iana.org/domains/example">More information...</a></p><p>secind</p></div><div></div>`;
   // const { parse } = require("node-html-parser");
   // const output = parse(test).getElementsByTagName("div")[1];

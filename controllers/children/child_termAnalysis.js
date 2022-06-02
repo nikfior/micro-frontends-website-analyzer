@@ -89,10 +89,10 @@ const childTermAnalysis = async (sanitizedId) => {
     // [node(terms) x node(terms)] -> clusters
     // cos similarity between all nodes using their terms bows
     console.log("Before getKmeansNodexNode");
-    const { maxAllres, clusteredBow, nodexnode } = getKmeansNodexNode(nodesDirArr);
+    const { maxAllres, clusteredBow } = getKmeansNodexNode(nodesDirArr);
     //
-    console.log("Before convertToMiningTreeFormat");
-    const gspanIn = convertToMiningTreeFormat(domFromAllSubdirs, sanitizedId, maxAllres, nodexnode);
+    console.log("Before convertToGspanFormatAndModifyDom");
+    const gspanIn = convertToGspanFormatAndModifyDom(domFromAllSubdirs, sanitizedId, maxAllres, site.url);
     console.log("Before pythonGspan");
     const gspanOut = pythonGspan(sanitizedId);
     console.log("Before gspanOutToDotGraph");
@@ -106,7 +106,7 @@ const childTermAnalysis = async (sanitizedId) => {
           dotgraphs,
           gspanOut,
           gspanIn,
-          nodexnode,
+
           clusteredBow,
           // testcluster: [...testcluster],
           maxAllres,
@@ -146,18 +146,45 @@ const childTermAnalysis = async (sanitizedId) => {
 const gspanOutToDotGraph = (gspanOut) => {
   const dotgraphs = [];
 
+  // intermediate state that i need temporarily. 2D array where each line is a subdirectory graph and its first index is the title
+  const gspanGraphs = [];
   for (let line of gspanOut.graphs) {
     if (line.startsWith("t")) {
-      if (dotgraphs.length > 0) {
-        dotgraphs[dotgraphs.length - 1].push("}");
+      if (!line.startsWith("t # -1")) {
+        gspanGraphs.push([]);
+        gspanGraphs.at(-1).push(line);
       }
-      dotgraphs.push([]);
-      dotgraphs[dotgraphs.length - 1].push("digraph " + line.split(" ")[2] + " {");
-    } else if (line.startsWith("e")) {
-      dotgraphs[dotgraphs.length - 1].push(`${line.split(" ")[1]} -> ${line.split(" ")[2]};`);
+    } else {
+      gspanGraphs.at(-1).push(line);
     }
   }
-  dotgraphs[dotgraphs.length - 1].push("}");
+
+  for (let graph of gspanGraphs) {
+    dotgraphs.push([]);
+    dotgraphs.at(-1).push("digraph " + graph[0].split(" ")[2] + " {");
+    const edges = graph.filter((x) => /e \d+ \d+ -1/.test(x));
+    const vertices = graph.filter((x) => /v \d+ -?\d+/.test(x));
+    for (let edge of edges) {
+      // convert the vertex number to its label from the v lines
+      const label1 = vertices.find((x) => x.includes("v " + edge.split(" ")[1])).split(" ")[2];
+      const label2 = vertices.find((x) => x.includes("v " + edge.split(" ")[2])).split(" ")[2];
+      dotgraphs.at(-1).push(`${label1} -> ${label2};`);
+    }
+    dotgraphs.at(-1).push("}");
+  }
+
+  // for (let line of gspanOut.graphs) {
+  //   if (line.startsWith("t")) {
+  //     if (dotgraphs.length > 0) {
+  //       dotgraphs[dotgraphs.length - 1].push("}");
+  //     }
+  //     dotgraphs.push([]);
+  //     dotgraphs[dotgraphs.length - 1].push("digraph " + line.split(" ")[2] + " {");
+  //   } else if (line.startsWith("e")) {
+  //     dotgraphs[dotgraphs.length - 1].push(`${line.split(" ")[1]} -> ${line.split(" ")[2]};`);
+  //   }
+  // }
+  // dotgraphs[dotgraphs.length - 1].push("}");
 
   return dotgraphs;
 };
@@ -186,7 +213,9 @@ const pythonGspan = (sanitizedId) => {
   return { graphs, support };
 };
 
-const convertToMiningTreeFormat = (domFromAllSubdirs, sanitizedId, maxAllres, nodexnode) => {
+// ----
+
+const convertToGspanFormatAndModifyDom = (domFromAllSubdirs, sanitizedId, maxAllres, url) => {
   let gspanFormat = [];
   let vertexCounter;
   let i;
@@ -202,14 +231,7 @@ const convertToMiningTreeFormat = (domFromAllSubdirs, sanitizedId, maxAllres, no
   };
 
   const visit = (node) => {
-    // console.log(
-    //   node.nodeType,
-    //   "and",
-    //   node.tagName,
-    //   "and",
-    //   node.getAttribute && node.getAttribute("customId")
-    // );
-
+    //
     // if text node is empty then remove it and not show it in gspan format array
     if (node.nodeType !== 1) {
       const hasText = /\S/g.test(node.text);
@@ -220,18 +242,23 @@ const convertToMiningTreeFormat = (domFromAllSubdirs, sanitizedId, maxAllres, no
     }
 
     let label = node.nodeType === 1 ? node.getAttribute("customId") || "-1" : "-1";
-    // label = label ? label : "-1";
-    gspanFormat[i].push(`v ${vertexCounter} ${label}`);
+    const kmeansClusterLabel = maxAllres.idxs[label.split(";")[1]];
+
+    // add vertices to gspanFormat array
+    gspanFormat[i].push(`v ${vertexCounter} ${kmeansClusterLabel !== undefined ? kmeansClusterLabel : "-1"}`);
+
+    // add a vertex counter so I know that I have iterate it and added it to the gspanFormat array. Check nodeType because textNodes (type=3) don't have attributes
     if (node.nodeType !== 3) {
       node.setAttribute("vertexCounter", vertexCounter);
     }
 
+    // add edges to gspanFormat array
     if (node.tagName !== "BODY") {
       gspanFormat[i].push(`e ${node.parentNode.getAttribute("vertexCounter")} ${vertexCounter} -1`);
     }
 
+    // modify dom to display colored border depending on its cluster
     if (label !== "-1") {
-      const kmeansClusterLabel = maxAllres.idxs[label.split(";")[1]];
       node.setAttribute(
         "style",
         `border-style: solid;border-color: ${palette[kmeansClusterLabel].hex()};border-width: thick;`
@@ -248,16 +275,89 @@ const convertToMiningTreeFormat = (domFromAllSubdirs, sanitizedId, maxAllres, no
     gspanFormat[i].push("t # " + i);
     const body = domFromAllSubdirs[i].getElementsByTagName("body")[0];
     // when html code is bad it may lead to non body tag
-    if (!body) {
-      continue;
+    if (body) {
+      breadth({ tree: body, visit, getChildren });
     }
-    breadth({ tree: body, visit, getChildren });
+
+    // modify dom to make relative css and images, absolute
+    cssAndImgToAbsoluteHref(domFromAllSubdirs[i], url);
+    gspanFormat[i] = trimTree(gspanFormat[i]);
   }
 
   gspanFormat[i - 1].push("t # -1");
   writeFileSync(sanitizedId + "gspanIn.txt", gspanFormat.flat(10).join("\n"));
   return gspanFormat;
 };
+
+const trimTree = (tree) => {
+  // copy tree title that is in the first line
+  const newtree = [tree[0]];
+
+  const edges = tree.filter((x) => /e \d+ \d+ -1/.test(x));
+  // the index of edgesLabel is the number of the first vertex(the parent) and the value are the children
+  const edgesLabeled = [];
+  edges.forEach((edge) => {
+    const splitted = edge.split(" ");
+    if (!edgesLabeled[splitted[1]]) {
+      edgesLabeled[splitted[1]] = [splitted[2]];
+    } else {
+      edgesLabeled[splitted[1]].push(splitted[2]);
+    }
+  });
+
+  const vertices = tree.filter((x) => /v \d+ -?\d+/.test(x));
+  // the index of verticesLabel is the number of the vertex and the value is its label
+  const verticesLabeled = [];
+  vertices.forEach((vertex) => {
+    const splitted = vertex.split(" ");
+    verticesLabeled[splitted[1]] = splitted[2];
+  });
+
+  // trimming
+  for (let i = 1; i < verticesLabeled.length; i++) {
+    // if parent is unlabeled(-1)
+    if (verticesLabeled[i] === "-1") {
+      // if all children are unlabeled then remove this connection
+      if (edgesLabeled[i] && edgesLabeled[i].every((x) => verticesLabeled[x] === "-1")) {
+        // find parent index
+        const parentIndex = edgesLabeled.findIndex((x) => x && x.includes(i.toString()));
+        edgesLabeled[parentIndex].push(edgesLabeled[i]);
+        // push children of current to parent
+        edgesLabeled[parentIndex] = edgesLabeled[parentIndex].flat(10);
+        // remove current from parent and the edge and vertice arrays
+        edgesLabeled[parentIndex].splice(edgesLabeled[parentIndex].indexOf(i.toString()), 1);
+        edgesLabeled[i] = null;
+        verticesLabeled[i] = null;
+      } else if (!edgesLabeled[i]) {
+        // when there are no children and label==-1 from first if
+        verticesLabeled[i] = null;
+        const parentIndex = edgesLabeled.findIndex((x) => x && x.includes(i.toString()));
+        edgesLabeled[parentIndex].splice(edgesLabeled[parentIndex].indexOf(i.toString()), 1);
+      }
+    }
+  }
+
+  for (let i = 0; i < verticesLabeled.length; i++) {
+    if (verticesLabeled[i] !== null) {
+      newtree.push(`v ${i} ${verticesLabeled[i]}`);
+    }
+  }
+
+  for (let i = 0; i < edgesLabeled.length; i++) {
+    if (edgesLabeled[i] !== null && edgesLabeled[i] !== undefined) {
+      for (let j = 0; j < edgesLabeled[i].length; j++) {
+        newtree.push(`e ${i} ${edgesLabeled[i][j]} -1`);
+      }
+    }
+  }
+
+  return newtree;
+  //
+};
+
+//
+// -----
+//
 
 // cos similarity between all nodes using their terms bows
 const getKmeansNodexNode = (nodesDirArr) => {
@@ -351,7 +451,7 @@ const getKmeansNodexNode = (nodesDirArr) => {
     );
   }
 
-  return { maxAllres, clusteredBow, nodexnode };
+  return { maxAllres, clusteredBow };
 };
 
 const costumDistanceFormula = (a, b) => {
@@ -474,6 +574,25 @@ const extractTerms = async (dom, subdIndex, countId) => {
   }
   return dirNode;
 
+  //
+};
+
+// modify dom to make relative css and images, absolute
+const cssAndImgToAbsoluteHref = (dom, url) => {
+  const css = dom.getElementsByTagName("link"); // TODOTODO check if it doesn't start with /.
+  css.forEach((node) => {
+    const href = node.getAttribute("href");
+    if (href && href.startsWith("/")) {
+      node.setAttribute("href", new URL(href, url).href);
+    }
+  });
+  const img = dom.getElementsByTagName("img"); // TODOTODO check if it doesn't start with /.
+  img.forEach((node) => {
+    const src = node.getAttribute("src");
+    if (src && src.startsWith("/")) {
+      node.setAttribute("src", new URL(src, url).href);
+    }
+  });
   //
 };
 
