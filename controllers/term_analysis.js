@@ -3,11 +3,11 @@ const DB_Model_Analysis = require("../db/Model_TermAnalysis");
 const { fork } = require("child_process");
 
 const getTermAnalysis = async (req, res) => {
-  const sanitizedId = req.query.id.toString().replace(/\$/g, "");
-  // ---------------------------------------------TODO use Set to remove duplicates; check for title, not only text
-  // save the analysis in the db and here at the beginning check if it exists in the db first and if it doesn't then execute it and save it in the db then
-  // maybe even it analyzes for first time add loading animation and say it might take a while
   try {
+    const sanitizedId = req.query.id?.toString().replace(/\$/g, "");
+    // ---------------------------------------------TODO use Set to remove duplicates; check for title, not only text
+    // save the analysis in the db and here at the beginning check if it exists in the db first and if it doesn't then execute it and save it in the db then
+    // maybe even it analyzes for first time add loading animation and say it might take a while
     const site = await DB_Model_Sites.findById(sanitizedId);
     if (!site) {
       return res.status(404).json({ msg: "Site not found for analysis. Please add site first" });

@@ -337,6 +337,25 @@ const trimTree = (tree) => {
     }
   }
 
+  // // trim the first node (body) seperately to remove the second level unlabeled nodes
+  // if (
+  //   verticesLabeled[0] === "-1" &&
+  //   edgesLabeled[0] &&
+  //   edgesLabeled[0].every((x) => verticesLabeled[x] === "-1")
+  // ) {
+  //   let grandChildren = [];
+  //   for (const childIndex of edgesLabeled[0]) {
+  //     if (edgesLabeled[childIndex]) {
+  //       grandChildren.push(edgesLabeled[childIndex]);
+  //       edgesLabeled[childIndex] = null;
+  //     }
+  //     verticesLabeled[childIndex] = null;
+  //   }
+  //   grandChildren = grandChildren.flat(10);
+  //   edgesLabeled[0] = grandChildren;
+  // }
+
+  // convert to python gspan format
   for (let i = 0; i < verticesLabeled.length; i++) {
     if (verticesLabeled[i] !== null) {
       newtree.push(`v ${i} ${verticesLabeled[i]}`);

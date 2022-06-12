@@ -41,8 +41,10 @@ const home = async (req, res) => {
   // };
   // depth({ tree, visit, getChildren, leave });
   // --------------------------
-  // const test = `<div><p><a href="https://www.iana.org/domains/example">More information...</a></p><p>secind</p></div><div></div>`;
+  // const test = `<div><p><a vertex="4" href="https://www.iana.org/domains/example">More information...</a></p><p>secind</p></div><div></div>`;
   // const { parse } = require("node-html-parser");
+  // const output = parse(test).querySelectorAll("[vertex]");
+  // console.log("sd");
   // const output = parse(test).getElementsByTagName("div")[1];
   // if (!output.text) {
   //   console.log("S");
