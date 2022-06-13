@@ -4,7 +4,12 @@ const { fork } = require("child_process");
 
 const getTermAnalysis = async (req, res) => {
   try {
-    const sanitizedId = req.query.id?.toString().replace(/\$/g, "");
+    // const sanitizedId = req.query.id?.toString().replace(/\$/g, "");
+    const sanitizedId = req.query.id?.toString().match(/^[0-9a-f]*$/i)[0];
+    let sanitizedUpperNodeLimit = req.query.uppernodelimit?.toString().match(/^[0-9]*$/)[0];
+    let sanitizedUpperSubdirNum = req.query.uppersubdirnum?.toString().match(/^[0-9]*$/)[0];
+    sanitizedUpperNodeLimit = sanitizedUpperNodeLimit ? sanitizedUpperNodeLimit : "5";
+    sanitizedUpperSubdirNum = sanitizedUpperSubdirNum ? sanitizedUpperSubdirNum : "15";
     // ---------------------------------------------TODO use Set to remove duplicates; check for title, not only text
     // save the analysis in the db and here at the beginning check if it exists in the db first and if it doesn't then execute it and save it in the db then
     // maybe even it analyzes for first time add loading animation and say it might take a while
@@ -22,12 +27,14 @@ const getTermAnalysis = async (req, res) => {
     // here and below if it's completed or not done yet
 
     // if there is a forceReanalyze query then reanalyze it and don't get it from the database
-    if (!req.query.forcereanalyze) {
-      if (dbAnalysis && dbAnalysis.status.startsWith("Completed")) {
-        return res.json(dbAnalysis);
-      }
-
-      if (dbAnalysis && dbAnalysis.status.startsWith("Error")) {
+    if (
+      !req.query.forcereanalyze?.toString() ||
+      req.query.forcereanalyze?.toString().toLowerCase() === "false"
+    ) {
+      if (
+        dbAnalysis &&
+        (dbAnalysis.status.startsWith("Completed") || dbAnalysis.status.startsWith("Error"))
+      ) {
         return res.json(dbAnalysis);
       }
     }
@@ -39,7 +46,7 @@ const getTermAnalysis = async (req, res) => {
     );
 
     const childProcess = fork("./controllers/children/child_termAnalysis");
-    childProcess.send({ sanitizedId });
+    childProcess.send({ sanitizedId, sanitizedUpperNodeLimit, sanitizedUpperSubdirNum });
 
     return res.json(newdAnalysis);
   } catch (error) {

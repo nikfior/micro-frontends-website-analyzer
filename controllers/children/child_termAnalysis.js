@@ -23,22 +23,26 @@ const distinctColors = require("distinct-colors").default;
 // ----
 
 process.on("message", (message) => {
-  childTermAnalysis(message.sanitizedId);
+  childTermAnalysis(message.sanitizedId, message.sanitizedUpperNodeLimit, message.sanitizedUpperSubdirNum);
 });
 
 // ----
 
-const childTermAnalysis = async (sanitizedId) => {
+const childTermAnalysis = async (sanitizedId, sanitizedUpperNodeLimit, sanitizedUpperSubdirNum) => {
   try {
     await connectDB(process.env.MONGO_DB_URI);
 
     const site = await DB_Model_Sites.findById(sanitizedId);
 
+    // in case there are less subdirs than the upper limit
+    sanitizedUpperSubdirNum =
+      sanitizedUpperSubdirNum > site.subdirsname.length ? site.subdirsname.length : sanitizedUpperSubdirNum;
+
     let nodesDirArr = []; // each index is a site directory
     // each subdirectory of the site is passed in extractTerms to get back the terms. I am also passing the index of the subdirectory so that I can use it as part of the Id of each node
     let domFromAllSubdirs = [];
     let countId = 0;
-    for (let i = 0; i < site.html.length; i++) {
+    for (let i = 0; i < sanitizedUpperSubdirNum; i++) {
       const dom = parse(site.html[i]);
       domFromAllSubdirs.push(dom);
       nodesDirArr.push(await extractTerms(dom, i, countId));
@@ -94,16 +98,17 @@ const childTermAnalysis = async (sanitizedId) => {
     console.log("Before convertToGspanFormatAndModifyDom");
     const gspanIn = convertToGspanFormatAndModifyDom(domFromAllSubdirs, sanitizedId, maxAllres, site.url);
     console.log("Before pythonGspan");
-    const gspanOut = pythonGspan(sanitizedId);
+    const gspanOut = pythonGspan(sanitizedId, sanitizedUpperNodeLimit);
     console.log("Before gspanOutToDotGraph");
-    const dotgraphs = gspanOut.graphs ? gspanOutToDotGraph(gspanOut) : null;
-    console.log("Finito");
+    const dotgraphTrees = gspanOut.graphs
+      ? gspanOutToDotGraph(gspanOut, domFromAllSubdirs, nodesDirArr)
+      : null;
     const newAnalysis = await DB_Model_Analysis.findOneAndUpdate(
       { datasetSiteId: sanitizedId },
       {
-        status: "Completed at " + new Date(),
+        status: `Completed at ${new Date()}. With query parameters uppernodelimit=${sanitizedUpperNodeLimit} and subdirnum=${sanitizedUpperSubdirNum}`,
         analysis: {
-          dotgraphs,
+          dotgraphTrees,
           gspanOut,
           gspanIn,
 
@@ -122,6 +127,7 @@ const childTermAnalysis = async (sanitizedId) => {
       },
       { new: true, upsert: true }
     );
+    console.log("Finito");
     process.exit();
   } catch (error) {
     try {
@@ -143,56 +149,101 @@ const childTermAnalysis = async (sanitizedId) => {
 
 // ----
 
-const gspanOutToDotGraph = (gspanOut) => {
+const gspanOutToDotGraph = (gspanOut, domFromAllSubdirs, nodesDirArr) => {
   const dotgraphs = [];
+  const dotgraphBackRenderedDoms = [];
+  const allNodesFromAllSubds = nodesDirArr.flat(10);
 
-  // intermediate state that i need temporarily. 2D array where each line is a subdirectory graph and its first index is the title
-  const gspanGraphs = [];
   for (let line of gspanOut.graphs) {
-    if (line.startsWith("t")) {
+    if (line.startsWith("v")) {
+      const nodeLabel = line.split(" ")[2];
+      dotgraphs
+        .at(-1)
+        .push(
+          `${line.split(" ")[1]} [label="${nodeLabel}${
+            nodeLabel > -1 ? ":\n" + allNodesFromAllSubds[nodeLabel].terms.join("\n") : ""
+          }"]`
+        );
+    } else if (line.startsWith("e")) {
+      dotgraphs.at(-1).push(`${line.split(" ")[1]} -> ${line.split(" ")[2]}`);
+    } else if (line.startsWith("t")) {
       if (!line.startsWith("t # -1")) {
-        gspanGraphs.push([]);
-        gspanGraphs.at(-1).push(line);
+        if (dotgraphs.length > 0) {
+          dotgraphs.at(-1).push(`}`);
+        }
+        dotgraphs.push([]);
+        dotgraphs.at(-1).push(`digraph ${line.split(" ")[2]} {`);
+      } else {
+        dotgraphs.at(-1).push(`}`);
+        break;
       }
-    } else {
-      gspanGraphs.at(-1).push(line);
     }
   }
 
-  for (let graph of gspanGraphs) {
-    dotgraphs.push([]);
-    dotgraphs.at(-1).push("digraph " + graph[0].split(" ")[2] + " {");
-    const edges = graph.filter((x) => /e \d+ \d+ -1/.test(x));
-    const vertices = graph.filter((x) => /v \d+ -?\d+/.test(x));
-    for (let edge of edges) {
-      // convert the vertex number to its label from the v lines
-      const label1 = vertices.find((x) => x.includes("v " + edge.split(" ")[1])).split(" ")[2];
-      const label2 = vertices.find((x) => x.includes("v " + edge.split(" ")[2])).split(" ")[2];
-      dotgraphs.at(-1).push(`${label1} -> ${label2};`);
+  for (let i = 0; i < dotgraphs.length; i++) {
+    if (
+      Array.from(dotgraphs[i].join("\n").matchAll(/^\d+ \[label="(-?\d+)/gm), (x) => x[1]).every(
+        (x) => x === "-1"
+      )
+    ) {
+      dotgraphs.splice(i, 1);
+      i--;
     }
-    dotgraphs.at(-1).push("}");
   }
 
+  //   for(let graph of dotgraphs){
+  //     const min=Infinity;
+  //     graph.forEach((line)=>{
+  // if(line.startsWith())
+  //     })
+  //   }
+
+  // // intermediate state that i need temporarily. 2D array where each line is a subdirectory graph and its first index is the title
+  // const gspanGraphs = [];
   // for (let line of gspanOut.graphs) {
   //   if (line.startsWith("t")) {
-  //     if (dotgraphs.length > 0) {
-  //       dotgraphs[dotgraphs.length - 1].push("}");
+  //     if (!line.startsWith("t # -1")) {
+  //       gspanGraphs.push([]);
+  //       gspanGraphs.at(-1).push(line);
   //     }
-  //     dotgraphs.push([]);
-  //     dotgraphs[dotgraphs.length - 1].push("digraph " + line.split(" ")[2] + " {");
-  //   } else if (line.startsWith("e")) {
-  //     dotgraphs[dotgraphs.length - 1].push(`${line.split(" ")[1]} -> ${line.split(" ")[2]};`);
+  //   } else {
+  //     gspanGraphs.at(-1).push(line);
   //   }
   // }
-  // dotgraphs[dotgraphs.length - 1].push("}");
 
-  return dotgraphs;
+  // for (let graph of gspanGraphs) {
+  //   dotgraphs.push([]);
+  //   dotgraphs.at(-1).push("digraph " + graph[0].split(" ")[2] + " {");
+  //   const edges = graph.filter((x) => /e \d+ \d+ -1/.test(x));
+  //   const vertices = graph.filter((x) => /v \d+ -?\d+/.test(x));
+  //   for (let edge of edges) {
+  //     // convert the vertex number to its label from the v lines
+  //     const label1 = vertices.find((x) => x.includes("v " + edge.split(" ")[1])).split(" ")[2];
+  //     const label2 = vertices.find((x) => x.includes("v " + edge.split(" ")[2])).split(" ")[2];
+  //     dotgraphs.at(-1).push(`${label1} -> ${label2};`);
+  //   }
+  //   dotgraphs.at(-1).push("}");
+  // }
+
+  return { dotgraphs, dotgraphBackRenderedDoms };
 };
 
 // ----
 
-const pythonGspan = (sanitizedId) => {
-  const pyArgs = ["-m", "gspan_mining", "-s", "2", "-d", "True", sanitizedId + "gspanIn.txt"];
+const pythonGspan = (sanitizedId, sanitizedUpperNodeLimit) => {
+  const pyArgs = [
+    "-m",
+    "gspan_mining",
+    "-s",
+    "2",
+    "-u",
+    sanitizedUpperNodeLimit,
+    "-w",
+    "True",
+    "-d",
+    "True",
+    sanitizedId + "gspanIn.txt",
+  ];
   const pyProg = spawnSync("python", pyArgs);
 
   // remove file for gspan after finishing
@@ -208,9 +259,14 @@ const pythonGspan = (sanitizedId) => {
     return "Error Executing Tree mining";
   }
 
-  const support = pyProg.stdout.toString().match(/^Support.+$/gm);
   const graphs = pyProg.stdout.toString().match(/^(t|v|e).+$/gm);
-  return { graphs, support };
+  const where = Array.from(pyProg.stdout.toString().matchAll(/^where: \[(.+)\]$/gm), (x) => x[1].split(", "));
+  const support = pyProg.stdout
+    .toString()
+    .match(/^Support.+$/gm)
+    .map((x) => x.split(" ")[1]);
+
+  return { graphs, support, where };
 };
 
 // ----
@@ -382,12 +438,13 @@ const trimTree = (tree) => {
 const getKmeansNodexNode = (nodesDirArr) => {
   //
   console.log("first");
-  let allNodesFromAllSubds = []; // allNodesFromAllSubds: all nodes from all subds
-  nodesDirArr.forEach((subd) => {
-    subd.forEach((node) => {
-      allNodesFromAllSubds.push(node);
-    });
-  });
+  const allNodesFromAllSubds = nodesDirArr.flat(10); // allNodesFromAllSubds: all nodes from all subds in one array
+  // let allNodesFromAllSubds = [];
+  // nodesDirArr.forEach((subd) => {
+  //   subd.forEach((node) => {
+  //     allNodesFromAllSubds.push(node);
+  //   });
+  // });
 
   console.log("second with length " + allNodesFromAllSubds.length);
   //
@@ -426,9 +483,10 @@ const getKmeansNodexNode = (nodesDirArr) => {
       : nodexnode[0].length; // TODO find better upper limit
 
   for (let c = 2; c < upperLimit; c++) {
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 40; i++) {
       console.log("in kmeans at c= " + c + " and repeat at i= " + i);
-      let res = skmeans(nodexnode, c, null, null, costumDistanceFormula);
+      // for 10 iterations use the kmpp initialization algorithm
+      let res = skmeans(nodexnode, c, i < 10 ? "kmpp" : null, null, costumDistanceFormula);
       // console.log(res);
       let coef = silhouetteCoefficient(nodexnode, res.idxs, costumDistanceFormula);
       // console.log("place", i, "number", coef);

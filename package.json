@@ -17,6 +17,7 @@
     "ngraph.fromdot": "^7.0.0",
     "node-html-parser": "^5.2.0",
     "recursive-iterator": "^3.3.0",
+    "sanitize-html": "^2.7.0",
     "skmeans": "^0.11.3",
     "tree-visit": "^0.1.2",
     "treeverse": "^2.0.0",

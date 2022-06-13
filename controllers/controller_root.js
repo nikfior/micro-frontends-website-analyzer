@@ -11,10 +11,6 @@ const logoutUser = (req, res) => {
 // const model = require("wink-eng-lite-model");
 // const { parse } = require("node-html-parser");
 const home = async (req, res) => {
-  // const getChildren = (node) => {
-  //   return node.child;
-  // };
-
   // const visit = (x) => {
   //   console.log(x.tag);
   //   return x;
@@ -40,12 +36,22 @@ const home = async (req, res) => {
   //   ],
   // };
   // depth({ tree, visit, getChildren, leave });
-  // --------------------------
-  // const test = `<div><p><a vertex="4" href="https://www.iana.org/domains/example">More information...</a></p><p>secind</p></div><div></div>`;
+  // ---------------test-----------
+  // const test = `<!DOCTYPE html><html>
+  // <head></head>
+  // <body>
+  // <div>
+  // </body>
+  // </html>`;
   // const { parse } = require("node-html-parser");
+  // const output = parse(test).getElementsByTagName("body");
+  // console.log(output);
+  // const sanitizeHtml = require("sanitize-html");
+  // const out = sanitizeHtml(test, { allowedTags: false, allowedAttributes: false });
+  // console.log(out);
+  // --------------------------
   // const output = parse(test).querySelectorAll("[vertex]");
   // console.log("sd");
-  // const output = parse(test).getElementsByTagName("div")[1];
   // if (!output.text) {
   //   console.log("S");
   // }

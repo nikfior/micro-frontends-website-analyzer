@@ -20,18 +20,21 @@ const childCreateSite = async (url) => {
     // console.log(html.status);
     // console.log(html.data);
 
-    const [subdirsName, subDirs] = await crawler(html.data, url);
+    // html.request.res.responseUrl is the actual url after the redirects
+    const [subdirsName, subDirs] = await crawler(html.data, html.request.res.responseUrl);
 
     const site = await DB_Model_Sites.create({
       url: url,
-      status: "Completed Ok",
+      status: "Completed scraping Ok",
       html: subDirs,
       subdirsname: subdirsName,
       creationDate: new Date(),
     });
+
     process.exit();
   } catch (error) {
     console.log("Error when scraping: " + error.message);
+    // TODO maybe inform the user via a database site creation with an error status
     process.exit();
   }
 };
@@ -40,33 +43,43 @@ const childCreateSite = async (url) => {
 
 const crawler = async (htmlData, url) => {
   const dom = parse(htmlData);
+  if (!dom.getElementsByTagName("body")) {
+    throw new Error("Possible malformed HTML. Cannot parse HTML code correctly.");
+  }
   const subdirs = dom.querySelectorAll("a");
   let subdirHTMLArr = [htmlData];
-  let subdirsName = ["/"];
+  let subdirsName = [url];
   for (let node of subdirs) {
     try {
       // console.log(node.getAttribute("href"));
       // TODO also check if it is absolute and starts with the site url ALSO CHECK if it is the same url as before
       if (
         !node.getAttribute("href") ||
-        (!node.getAttribute("href").startsWith(url) && !node.getAttribute("href").startsWith("/"))
+        (!node.getAttribute("href").startsWith(new URL(url).origin) &&
+          !node.getAttribute("href").startsWith("/"))
       ) {
         continue;
       }
       // makes the relative paths, absolute
       const subdirname = new URL(node.getAttribute("href"), url).href;
-      // const subdirname = node.getAttribute("href").startsWith("/")
-      //   ? url + node.getAttribute("href")
-      //   : node.getAttribute("href");
+
       let html = await axios.get(subdirname);
 
-      // let html = await axios.get(node.getAttribute("href"));
+      // if it already exists then skip it
+      if (subdirsName.includes(html.request.res.responseUrl)) {
+        continue;
+      }
+
+      // check for malformed html code
+      const checkDom = parse(html.data);
+      if (!checkDom.getElementsByTagName("body")[0]) {
+        continue;
+      }
+
       subdirHTMLArr.push(html.data);
-      subdirsName.push(subdirname);
-      // keep only the relative path
-      // subdirsName.push(
-      //   url.endsWith("/") ? subdirname.slice(url.length - 1) : subdirname.slice(url.length)
-      // );
+      subdirsName.push(html.request.res.responseUrl);
+
+      //
     } catch (error) {
       if (error.message != "Cannot read property 'replace' of null" || !(error instanceof TypeError)) {
         // console.log("Print error that is not just invalid URL");
@@ -74,7 +87,7 @@ const crawler = async (htmlData, url) => {
 
         const site = await DB_Model_Sites.create({
           url: url,
-          status: "Completed with error when scraping: " + error.message,
+          status: "Completed scraping with error when scraping: " + error.message,
           html: subdirHTMLArr,
           subdirsname: subdirsName,
           creationDate: new Date(),
