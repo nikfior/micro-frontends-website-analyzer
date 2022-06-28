@@ -1,6 +1,7 @@
 const DB_Model_Sites = require("../db/Model_Site");
 const DB_Model_Users = require("../db/Model_Users");
 const { fork } = require("child_process");
+const axios = require("axios");
 
 // const jsdom = require("jsdom");
 // const { JSDOM } = jsdom;
@@ -26,14 +27,35 @@ const getMenu = async (req, res) => {
 
 const createSite = async (req, res) => {
   try {
-    const childProcess = fork("./controllers/children/child_createSite");
-    childProcess.send({ url: req.body.url }); // TODO sanitize or check
+    if (!req.body.url) {
+      return res.status(400).json({ msg: "The url to be processed is missing" });
+    }
 
-    res
+    let sanitizedUrl = req.body.url.toString();
+    if (!sanitizedUrl.startsWith("http://") && !sanitizedUrl.startsWith("https://")) {
+      sanitizedUrl = "http://" + sanitizedUrl;
+    }
+
+    // test for url validity
+    const html = await axios.get(sanitizedUrl);
+
+    const childProcess = fork("./controllers/children/child_createSite");
+    childProcess.send({ url: sanitizedUrl });
+
+    return res
       .status(201)
       .json({ msg: "The site is being scraped. The new listing will be shown in the menu when ready" });
   } catch (error) {
-    res.status(500).json({ msg: error.message });
+    if (error.response) {
+      return res.status(400).json({
+        msg: "The requested page url returns an error status code. Please make sure the requested webpage works as expected",
+      });
+    } else if (error.request) {
+      return res.status(400).json({
+        msg: "The url to be processed is invalid. Make sure you have included the correct protocol (http/https) and that the url is valid",
+      });
+    }
+    return res.status(500).json({ msg: error.message });
   }
 };
 

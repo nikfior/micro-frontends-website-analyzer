@@ -21,7 +21,30 @@ const childCreateSite = async (url) => {
     // console.log(html.data);
 
     // html.request.res.responseUrl is the actual url after the redirects
-    const [subdirsName, subDirs] = await crawler(html.data, html.request.res.responseUrl);
+    let [subdirsName, subDirs] = await crawler(html.data, html.request.res.responseUrl);
+
+    // remove subdirectories with different languages if I have more than 5 subdirectories
+    if (subDirs.length > 5) {
+      let indexesToDelete = [];
+      subdirsName.forEach((subdDirUrl, index) => {
+        if (/[/=](el|gr|fr|de)([/&]|$)/i.test(subdDirUrl)) {
+          indexesToDelete.push(index);
+        }
+      });
+
+      subdirsName = subdirsName.filter((x, index) => !indexesToDelete.includes(index));
+      subDirs = subDirs.filter((x, index) => !indexesToDelete.includes(index));
+    }
+
+    // if size of HTML array is too big then remove some subdirectories.
+    while (JSON.stringify(subDirs).length > 17000000) {
+      if (subDirs.length > 1) {
+        subdirsName.pop();
+        subDirs.pop();
+      } else {
+        throw new Error("HTML code too large even in one subdirectory");
+      }
+    }
 
     const site = await DB_Model_Sites.create({
       url: url,
@@ -81,10 +104,10 @@ const crawler = async (htmlData, url) => {
 
       //
     } catch (error) {
-      if (error.message != "Cannot read property 'replace' of null" || !(error instanceof TypeError)) {
-        // console.log("Print error that is not just invalid URL");
-        // TODO to check more
-
+      // if there is an error with the request/response then just continue on with the rest of the subdirectories
+      // otherwise if it's an error with the program then save what is already done and throw an error
+      // if (error.message != "Cannot read property 'replace' of null" || !(error instanceof TypeError)) {
+      if (!error.request && !error.response) {
         const site = await DB_Model_Sites.create({
           url: url,
           status: "Completed scraping with error when scraping: " + error.message,
