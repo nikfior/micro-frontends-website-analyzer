@@ -1,6 +1,7 @@
 {
   "dependencies": {
     "axios": "^0.24.0",
+    "clone": "^2.1.2",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
     "distinct-colors": "^3.0.0",

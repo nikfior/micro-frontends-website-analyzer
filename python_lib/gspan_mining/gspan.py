@@ -347,6 +347,18 @@ class gSpan(object):
             g.plot()
         if self._where:
             print('where: {}'.format(list(set([p.gid for p in projected]))))
+            for p in projected:
+                print("s:"+str(p.gid))
+                ##print("origin:"+str(p.edge.frm),str(p.edge.to),str(p.edge.elb))
+                tempListToReverse=["o:"+str(p.edge.frm)+" "+str(p.edge.to)]
+                currPItem=p.prev
+                while currPItem is not None:
+                    ##print("origin:"+str(currPItem.edge.frm),str(currPItem.edge.to),str(currPItem.edge.elb))
+                    tempListToReverse.append("o:"+str(currPItem.edge.frm)+" "+str(currPItem.edge.to))
+                    currPItem=currPItem.prev                    
+                tempListToReverse.reverse()
+                print("\n".join(tempListToReverse))
+                print("----")                    
         print('\n-----------------\n')
 
     def _get_forward_root_edges(self, g, frm):

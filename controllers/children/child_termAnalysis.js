@@ -6,8 +6,8 @@ const model = require("wink-eng-lite-model");
 const nlp = require("wink-nlp")(model);
 const its = require("wink-nlp/src/its.js");
 const as = require("wink-nlp/src/as.js");
-const BM25Vectorizer = require("wink-nlp/utilities/bm25-vectorizer");
-const bm25 = BM25Vectorizer();
+// const BM25Vectorizer = require("wink-nlp/utilities/bm25-vectorizer");
+// const bm25 = BM25Vectorizer();
 var WordPOS = require("wordpos");
 var wordpos = new WordPOS();
 const similarity = require("wink-nlp/utilities/similarity.js");
@@ -17,6 +17,7 @@ const { breadth } = require("treeverse");
 const { writeFileSync, unlinkSync } = require("fs");
 const { spawnSync } = require("child_process");
 const distinctColors = require("distinct-colors").default;
+const clone = require("clone");
 
 // ----
 
@@ -97,9 +98,17 @@ const childTermAnalysis = async (sanitizedId, sanitizedUpperNodeLimit, sanitized
     const gspanIn = convertToGspanFormatAndModifyDom(domFromAllSubdirs, sanitizedId, maxAllres, site.url);
     console.log("Before pythonGspan");
     const gspanOut = pythonGspan(sanitizedId, sanitizedUpperNodeLimit);
+
+    // domFromAllSubdirs2 is a clone of domFromAllSubdirs that will not have its different nodes stylized depending on their cluster label. It will be used in the gspanOutToDotGraph function to render the frequent trees in html
+    const domFromAllSubdirsUnmodified = clone(domFromAllSubdirs);
+    // const domFromAllSubdirs2 = structuredClone(domFromAllSubdirs);
+
+    // adds stylization (colored rectangles) to dom elements that belong in a cluster
+    stylizedDomElementsByClusterLabel(domFromAllSubdirs, maxAllres);
+
     console.log("Before gspanOutToDotGraph");
     const dotgraphTrees = gspanOut.graphs
-      ? gspanOutToDotGraph(gspanOut, domFromAllSubdirs, nodesDirArr)
+      ? gspanOutToDotGraph(gspanOut, domFromAllSubdirsUnmodified, nodesDirArr)
       : null;
     const newAnalysis = await DB_Model_Analysis.findOneAndUpdate(
       { datasetSiteId: sanitizedId },
@@ -147,83 +156,150 @@ const childTermAnalysis = async (sanitizedId, sanitizedUpperNodeLimit, sanitized
 
 // ----
 
-const gspanOutToDotGraph = (gspanOut, domFromAllSubdirs, nodesDirArr) => {
-  const dotgraphs = [];
-  const dotgraphBackRenderedDoms = [];
-  const allNodesFromAllSubds = nodesDirArr.flat(10);
-
-  for (let line of gspanOut.graphs) {
-    if (line.startsWith("v")) {
-      const nodeLabel = line.split(" ")[2];
-      dotgraphs
-        .at(-1)
-        .push(
-          `${line.split(" ")[1]} [label="${nodeLabel}${
-            nodeLabel > -1 ? ":\n" + allNodesFromAllSubds[nodeLabel].terms.join("\n") : ""
-          }"]`
-        );
-    } else if (line.startsWith("e")) {
-      dotgraphs.at(-1).push(`${line.split(" ")[1]} -> ${line.split(" ")[2]}`);
-    } else if (line.startsWith("t")) {
-      if (!line.startsWith("t # -1")) {
-        if (dotgraphs.length > 0) {
-          dotgraphs.at(-1).push(`}`);
-        }
-        dotgraphs.push([]);
-        dotgraphs.at(-1).push(`digraph ${line.split(" ")[2]} {`);
-      } else {
-        dotgraphs.at(-1).push(`}`);
-        break;
-      }
-    }
+const gspanOutToDotGraph = (gspanOut, domFromAllSubdirsUnmodified, nodesDirArr) => {
+  // sort based on support
+  const dotGraphsTemp = [];
+  const dotSupport = [];
+  const dotWhere = [];
+  const dotOrigins = [];
+  const tempList = [];
+  for (let i = 0; i < gspanOut.support.length; i++) {
+    tempList.push({
+      graphs: gspanOut.graphs[i],
+      support: gspanOut.support[i],
+      where: gspanOut.where[i],
+      origins: gspanOut.origins[i],
+    });
+  }
+  tempList.sort((a, b) => {
+    return b.support - a.support;
+  });
+  for (let i = 0; i < gspanOut.support.length; i++) {
+    dotGraphsTemp.push(tempList[i].graphs);
+    dotSupport.push(tempList[i].support);
+    dotWhere.push(tempList[i].where);
+    dotOrigins.push(tempList[i].origins);
   }
 
+  //
+  // convert to dot format
+  const dotgraphs = [];
+  const allNodesFromAllSubds = nodesDirArr.flat(10);
+
+  for (let graph of dotGraphsTemp) {
+    dotgraphs.push([]);
+
+    for (let line of graph) {
+      if (line.startsWith("v")) {
+        const nodeLabel = line.split(" ")[2];
+        dotgraphs.at(-1).push(`${line.split(" ")[1]} [label="${nodeLabel}"]`);
+        // TODO the nodeLabel is the clusterlabel and not the node id so I have to change it
+        // dotgraphs
+        //   .at(-1)
+        //   .push(
+        //     `${line.split(" ")[1]} [label="${nodeLabel}${
+        //       nodeLabel > -1 ? ":\n" + allNodesFromAllSubds[nodeLabel].terms.join("\n") : ""
+        //     }"]`
+        //   );
+      } else if (line.startsWith("e")) {
+        dotgraphs.at(-1).push(`${line.split(" ")[1]} -> ${line.split(" ")[2]}`);
+      } else if (line.startsWith("t")) {
+        dotgraphs.at(-1).push(`digraph ${line.split(" ")[2]} {`);
+      }
+    }
+
+    dotgraphs.at(-1).push(`}`);
+  }
+
+  //
+  // make a temporary nodeLabels array to clean up unecessary data
+  const nodeLabels = [];
   for (let i = 0; i < dotgraphs.length; i++) {
-    if (
-      Array.from(dotgraphs[i].join("\n").matchAll(/^\d+ \[label="(-?\d+)/gm), (x) => x[1]).every(
-        (x) => x === "-1"
-      )
-    ) {
+    nodeLabels.push(Array.from(dotgraphs[i].join("\n").matchAll(/^\d+ \[label="(-?\d+)/gm), (x) => x[1]));
+  }
+
+  // remove dotgraphs that have only -1 labels
+  for (let i = 0; i < nodeLabels.length; i++) {
+    if (nodeLabels[i].every((x) => x === "-1")) {
       dotgraphs.splice(i, 1);
+      dotWhere.splice(i, 1);
+      dotSupport.splice(i, 1);
+      dotOrigins.splice(i, 1);
+      nodeLabels.splice(i, 1);
       i--;
     }
   }
 
-  //   for(let graph of dotgraphs){
-  //     const min=Infinity;
-  //     graph.forEach((line)=>{
-  // if(line.startsWith())
-  //     })
-  //   }
+  // sort and filter to be used for later analyzing and cleanup
+  for (let i = 0; i < nodeLabels.length; i++) {
+    nodeLabels[i].sort();
+    nodeLabels[i] = nodeLabels[i].filter((x) => x !== "-1");
+  }
 
-  // // intermediate state that i need temporarily. 2D array where each line is a subdirectory graph and its first index is the title
-  // const gspanGraphs = [];
-  // for (let line of gspanOut.graphs) {
-  //   if (line.startsWith("t")) {
-  //     if (!line.startsWith("t # -1")) {
-  //       gspanGraphs.push([]);
-  //       gspanGraphs.at(-1).push(line);
-  //     }
-  //   } else {
-  //     gspanGraphs.at(-1).push(line);
-  //   }
-  // }
+  // remove frequent trees that are the same as others but with additional -1 labels. Basically remove unecessary -1 labels
+  for (let i = 0; i < nodeLabels.length; i++) {
+    for (let j = 0; j < nodeLabels.length; j++) {
+      if (i === j) {
+        continue;
+      }
+      if (nodeLabels[j].length > nodeLabels[i].length) {
+        continue;
+      }
+      if (nodeLabels[j].every((x) => nodeLabels[i].includes(x))) {
+        dotgraphs.splice(j, 1);
+        dotWhere.splice(j, 1);
+        dotSupport.splice(j, 1);
+        dotOrigins.splice(j, 1);
+        nodeLabels.splice(j, 1);
+        if (j < i) {
+          i--;
+        }
+        j--;
+      }
+    }
+  }
 
-  // for (let graph of gspanGraphs) {
-  //   dotgraphs.push([]);
-  //   dotgraphs.at(-1).push("digraph " + graph[0].split(" ")[2] + " {");
-  //   const edges = graph.filter((x) => /e \d+ \d+ -1/.test(x));
-  //   const vertices = graph.filter((x) => /v \d+ -?\d+/.test(x));
-  //   for (let edge of edges) {
-  //     // convert the vertex number to its label from the v lines
-  //     const label1 = vertices.find((x) => x.includes("v " + edge.split(" ")[1])).split(" ")[2];
-  //     const label2 = vertices.find((x) => x.includes("v " + edge.split(" ")[2])).split(" ")[2];
-  //     dotgraphs.at(-1).push(`${label1} -> ${label2};`);
-  //   }
-  //   dotgraphs.at(-1).push("}");
-  // }
+  // create the html rendering of the frequent trees
+  const dotgraphBackRenderedDoms = [];
+  for (let i = 0; i < nodeLabels.length; i++) {
+    const dom = clone(domFromAllSubdirsUnmodified[dotWhere[i][0]]);
+    // dotOrigins.forEach((graph) => {
+    //   graph.forEach((subdir) => {
+    //     subdir.forEach((origin) => {
+    //       origin.forEach((line) => {
+    //         dom
+    //           .querySelector(`[vertexCounter=${line[0]}]`)
+    //           .setAttribute("style", `border-style: solid;border-color: red;border-width: thick;`);
+    //         dom
+    //           .querySelector(`[vertexCounter=${line[1]}]`)
+    //           .setAttribute("style", `border-style: solid;border-color: red;border-width: thick;`);
+    //       });
+    //     });
+    //   });
+    // });
+    dotOrigins.forEach((graph) => {
+      graph[0].forEach((origin) => {
+        origin.forEach((line) => {
+          dom
+            .querySelector(`[vertexCounter=${line[0]}]`)
+            .setAttribute("style", `border-style: solid;border-color: red;border-width: thick;`);
+          dom
+            .querySelector(`[vertexCounter=${line[1]}]`)
+            .setAttribute("style", `border-style: solid;border-color: red;border-width: thick;`);
+        });
+      });
+    });
 
-  return { dotgraphs, dotgraphBackRenderedDoms };
+    // ---
+    // for (let number of nodeLabels[i]) {
+    //   dom
+    //     .querySelector(`[customId$=${number}]`)
+    //     .setAttribute("style", `border-style: solid;border-color: red;border-width: thick;`);
+    // }
+    dotgraphBackRenderedDoms.push(dom.toString());
+  }
+
+  return { dotgraphs, dotWhere, dotSupport, dotgraphBackRenderedDoms };
 };
 
 // ----
@@ -242,29 +318,69 @@ const pythonGspan = (sanitizedId, sanitizedUpperNodeLimit) => {
     "True",
     sanitizedId + "gspanIn.txt",
   ];
-  const pyProg = spawnSync("python", pyArgs);
+  const pyProg = spawnSync("python", pyArgs, { maxBuffer: Infinity });
 
   // remove file for gspan after finishing
   unlinkSync(sanitizedId + "gspanIn.txt");
 
-  // console.log(pyProg.stdout.toString());
-  if (!pyProg.stderr.toString().startsWith("<python_lib.gspan_mining.gspan.gSpan object at ")) {
-    console.log("stderr: ", pyProg.stderr.toString());
-    return "Error Executing Tree mining";
-  }
   if (pyProg.error) {
     console.log("python error: ", pyProg.error);
     return "Error Executing Tree mining";
   }
 
-  const graphs = pyProg.stdout.toString().match(/^(t|v|e).+$/gm);
+  if (pyProg.stderr.toString()) {
+    console.log("stderr: ", pyProg.stderr.toString());
+    return "stderror executing tree mining";
+  }
+
+  const allGraphs = pyProg.stdout.toString().match(/^(t|v|e).+$/gm);
   const where = Array.from(pyProg.stdout.toString().matchAll(/^where: \[(.+)\]$/gm), (x) => x[1].split(", "));
   const support = pyProg.stdout
     .toString()
     .match(/^Support.+$/gm)
     .map((x) => x.split(" ")[1]);
+  const allOrigins = pyProg.stdout.toString().match(/^(((s:|o:).+)|-----------------)$/gm);
+  allOrigins.pop(); // remove last dashes to make later analyzing easier
 
-  return { graphs, support, where };
+  // separate allGraphs into separate arrays of graphs. Different index in array for different graph
+  const graphs = [];
+  for (let line of allGraphs) {
+    if (line.startsWith("v") || line.startsWith("e")) {
+      graphs.at(-1).push(line);
+    } else if (line.startsWith("t")) {
+      if (!line.startsWith("t # -1")) {
+        graphs.push([]);
+        graphs.at(-1).push(line);
+      } else {
+        break;
+      }
+    }
+  }
+
+  // separate allOrigins into separate arrays. Each index holds all the origins of that subdirectory
+  const origins = [[]];
+  let oldSub;
+  for (let line of allOrigins) {
+    if (line.startsWith("o:")) {
+      origins.at(-1).at(-1).at(-1).push(line.split(":")[1].split(" "));
+    } else if (line.startsWith("s:")) {
+      // new index for every new subdirectory in a graph. make new one for each subdirectory
+      if (line.split(":")[1] !== oldSub) {
+        origins.at(-1).push([]);
+      }
+      // new index for every group of every subdirectory of every graph. It's basically a new index for every origin of a frequent tree
+      origins.at(-1).at(-1).push([]);
+      oldSub = line.split(":")[1];
+    } else if (line.startsWith("-----------------")) {
+      // new index in the array for each graph
+      origins.push([]);
+      oldSub = null;
+    } else {
+      console.log("Unexptected condition. Check it");
+    }
+  }
+
+  return { graphs, support, where, origins };
 };
 
 // ----
@@ -274,10 +390,9 @@ const convertToGspanFormatAndModifyDom = (domFromAllSubdirs, sanitizedId, maxAll
   let vertexCounter;
   let i;
 
-  const palette = distinctColors({ count: maxAllres.k });
-
   // const getChildren = (node) => node.childNodes;
   const getChildren = (node) => {
+    // TODO change if i also search for titles as well as texts
     if (!node.text) {
       return [];
     }
@@ -296,7 +411,7 @@ const convertToGspanFormatAndModifyDom = (domFromAllSubdirs, sanitizedId, maxAll
     }
 
     let label = node.nodeType === 1 ? node.getAttribute("customId") || "-1" : "-1";
-    const kmeansClusterLabel = maxAllres.idxs[label.split(";")[1]];
+    const kmeansClusterLabel = label === "-1" ? undefined : maxAllres.idxs[label.split(";")[1]];
 
     // add vertices to gspanFormat array
     gspanFormat[i].push(`v ${vertexCounter} ${kmeansClusterLabel !== undefined ? kmeansClusterLabel : "-1"}`);
@@ -311,14 +426,6 @@ const convertToGspanFormatAndModifyDom = (domFromAllSubdirs, sanitizedId, maxAll
       gspanFormat[i].push(`e ${node.parentNode.getAttribute("vertexCounter")} ${vertexCounter} -1`);
     }
 
-    // modify dom to display colored border depending on its cluster
-    if (label !== "-1") {
-      node.setAttribute(
-        "style",
-        `border-style: solid;border-color: ${palette[kmeansClusterLabel].hex()};border-width: thick;`
-      );
-    }
-
     vertexCounter++;
   };
 
@@ -328,9 +435,12 @@ const convertToGspanFormatAndModifyDom = (domFromAllSubdirs, sanitizedId, maxAll
     gspanFormat.push([]);
     gspanFormat[i].push("t # " + i);
     const body = domFromAllSubdirs[i].getElementsByTagName("body")[0];
-    // when html code is bad it may lead to non body tag
+
+    // when html code is bad it may lead to non body tag. Deprecated check. It now does this check at the scraping stage.
     if (body) {
       breadth({ tree: body, visit, getChildren });
+    } else {
+      console.log("Unexpected condition");
     }
 
     // modify dom to make relative css and images, absolute
@@ -654,21 +764,48 @@ const extractTerms = async (dom, subdIndex, countId) => {
 
 // modify dom to make relative css and images, absolute
 const cssAndImgToAbsoluteHref = (dom, url) => {
-  const css = dom.getElementsByTagName("link"); // TODOTODO check if it doesn't start with /.
+  const css = dom.getElementsByTagName("link"); // TODOTODO check if it works correctly for all relative and absolute hrefs.
   css.forEach((node) => {
     const href = node.getAttribute("href");
-    if (href && href.startsWith("/")) {
+    if (href) {
+      // && href.startsWith("/")) {
       node.setAttribute("href", new URL(href, url).href);
     }
   });
-  const img = dom.getElementsByTagName("img"); // TODOTODO check if it doesn't start with /.
+  const img = dom.getElementsByTagName("img"); // TODOTODO check if it works correctly for all relative and absolute srcs.
   img.forEach((node) => {
     const src = node.getAttribute("src");
-    if (src && src.startsWith("/")) {
+    if (src) {
+      // && src.startsWith("/")) {
       node.setAttribute("src", new URL(src, url).href);
     }
   });
   //
+};
+
+const stylizedDomElementsByClusterLabel = (domFromAllSubdirs, maxAllres) => {
+  const palette = distinctColors({ count: maxAllres.k });
+
+  for (let dom of domFromAllSubdirs) {
+    const nodes = dom.querySelectorAll("[customId]");
+    for (let node of nodes) {
+      const kmeansClusterLabel = maxAllres.idxs[node.getAttribute("customId").split(";")[1]];
+      node.setAttribute(
+        "style",
+        `border-style: solid;border-color: ${palette[kmeansClusterLabel].hex()};border-width: thick;`
+      );
+    }
+  }
+
+  // let label = node.nodeType === 1 ? node.getAttribute("customId") || "-1" : "-1";
+  // const kmeansClusterLabel = label === "-1" ? undefined : maxAllres.idxs[label.split(";")[1]];
+  // // modify dom to display colored border depending on its cluster
+  // if (label !== "-1") {
+  //   node.setAttribute(
+  //     "style",
+  //     `border-style: solid;border-color: ${palette[kmeansClusterLabel].hex()};border-width: thick;`
+  //   );
+  // }
 };
 
 // ====================================================================

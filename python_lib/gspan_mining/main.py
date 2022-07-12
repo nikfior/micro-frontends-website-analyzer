@@ -35,7 +35,9 @@ def main(FLAGS=None):
 
     gs.run()
     gs.time_stats()
-    return gs
+    if not str(gs).startswith("<python_lib.gspan_mining.gspan.gSpan object at "):
+        return gs
+    return 0
 
 
 if __name__ == '__main__':

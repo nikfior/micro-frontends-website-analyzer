@@ -41,6 +41,9 @@ const home = async (req, res) => {
   // <head></head>
   // <body>
   // <div>
+  // <a href="example.org" customId="5:6;7"></a>
+  // <a href="example.org" customId="5:6;8"></a>
+  // </div>
   // </body>
   // </html>`;
   // const { parse } = require("node-html-parser");
@@ -51,6 +54,7 @@ const home = async (req, res) => {
   // console.log(out);
   // --------------------------
   // const output = parse(test).querySelectorAll("[vertex]");
+  // const output = parse(test);
   // console.log("sd");
   // if (!output.text) {
   //   console.log("S");
