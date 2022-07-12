@@ -231,7 +231,7 @@ const gspanOutToDotGraph = (gspanOut, domFromAllSubdirs, nodesDirArr) => {
 const pythonGspan = (sanitizedId, sanitizedUpperNodeLimit) => {
   const pyArgs = [
     "-m",
-    "gspan_mining",
+    "python_lib.gspan_mining",
     "-s",
     "2",
     "-u",
@@ -248,7 +248,7 @@ const pythonGspan = (sanitizedId, sanitizedUpperNodeLimit) => {
   unlinkSync(sanitizedId + "gspanIn.txt");
 
   // console.log(pyProg.stdout.toString());
-  if (!pyProg.stderr.toString().startsWith("<gspan_mining.gspan.gSpan object at ")) {
+  if (!pyProg.stderr.toString().startsWith("<python_lib.gspan_mining.gspan.gSpan object at ")) {
     console.log("stderr: ", pyProg.stderr.toString());
     return "Error Executing Tree mining";
   }

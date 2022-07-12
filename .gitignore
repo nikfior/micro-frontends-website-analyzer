@@ -3,3 +3,4 @@
 
 # misc
 .env
+/python_lib/gspan_mining/__pycache__
