@@ -16,8 +16,8 @@ const silhouetteCoefficient = require("../silhouette_coefficient");
 const { breadth } = require("treeverse");
 const { writeFileSync, unlinkSync } = require("fs");
 const { spawnSync } = require("child_process");
-const distinctColors = require("distinct-colors").default;
-const clone = require("clone");
+const distinctColors = require("distinct-colors").default; // TODO make 20 nice distinct colors and make the global for each nodeLabel
+// const clone = require("clone");
 
 // ----
 
@@ -36,6 +36,9 @@ const childTermAnalysis = async (sanitizedId, sanitizedUpperNodeLimit, sanitized
     // in case there are less subdirs than the upper limit
     sanitizedUpperSubdirNum =
       sanitizedUpperSubdirNum > site.subdirsname.length ? site.subdirsname.length : sanitizedUpperSubdirNum;
+
+    let sanitizedSupport = sanitizedUpperSubdirNum; // TODOTODO make into query
+    let sanitizedLowerNodeLimit = 3; // TODOTODO make into query
 
     let nodesDirArr = []; // each index is a site directory
     // each subdirectory of the site is passed in extractTerms to get back the terms. I am also passing the index of the subdirectory so that I can use it as part of the Id of each node
@@ -96,27 +99,33 @@ const childTermAnalysis = async (sanitizedId, sanitizedUpperNodeLimit, sanitized
     //
     console.log("Before convertToGspanFormatAndModifyDom");
     const gspanIn = convertToGspanFormatAndModifyDom(domFromAllSubdirs, sanitizedId, maxAllres, site.url);
+
+    // adds stylization info (colored rectangles) to dom elements that belong in a cluster (doesn't actually stylize them)
+    stylizeDomElementsByClusterLabel(domFromAllSubdirs, maxAllres);
+
     console.log("Before pythonGspan");
-    const gspanOut = pythonGspan(sanitizedId, sanitizedUpperNodeLimit);
+    const gspanOut = pythonGspan(
+      sanitizedId,
+      sanitizedUpperNodeLimit,
+      sanitizedLowerNodeLimit,
+      sanitizedSupport
+    );
 
-    // domFromAllSubdirs2 is a clone of domFromAllSubdirs that will not have its different nodes stylized depending on their cluster label. It will be used in the gspanOutToDotGraph function to render the frequent trees in html
-    const domFromAllSubdirsUnmodified = clone(domFromAllSubdirs);
-    // const domFromAllSubdirs2 = structuredClone(domFromAllSubdirs);
-
-    // adds stylization (colored rectangles) to dom elements that belong in a cluster
-    stylizedDomElementsByClusterLabel(domFromAllSubdirs, maxAllres);
+    // const { readFileSync } = require("fs");
+    // const gspanOut = JSON.parse(readFileSync("debugtest.txt"));
 
     console.log("Before gspanOutToDotGraph");
     const dotgraphTrees = gspanOut.graphs
-      ? gspanOutToDotGraph(gspanOut, domFromAllSubdirsUnmodified, nodesDirArr)
+      ? gspanOutToDotGraph(gspanOut, domFromAllSubdirs, nodesDirArr, maxAllres)
       : null;
+
     const newAnalysis = await DB_Model_Analysis.findOneAndUpdate(
       { datasetSiteId: sanitizedId },
       {
         status: `Completed at ${new Date()}. With query parameters uppernodelimit=${sanitizedUpperNodeLimit} and subdirnum=${sanitizedUpperSubdirNum}`,
         analysis: {
           dotgraphTrees,
-          gspanOut,
+          gspanOut: { graphs: gspanOut.graphs, support: gspanOut.support, where: gspanOut.where }, // removed gspanOut.origins
           gspanIn,
 
           clusteredBow,
@@ -148,6 +157,7 @@ const childTermAnalysis = async (sanitizedId, sanitizedUpperNodeLimit, sanitized
       );
     } catch (error) {
       console.log("error saving the error in status: " + error.message);
+      process.exit();
     }
     console.log(error.message);
     process.exit();
@@ -156,13 +166,14 @@ const childTermAnalysis = async (sanitizedId, sanitizedUpperNodeLimit, sanitized
 
 // ----
 
-const gspanOutToDotGraph = (gspanOut, domFromAllSubdirsUnmodified, nodesDirArr) => {
-  // sort based on support
+const gspanOutToDotGraph = (gspanOut, domFromAllSubdirs, nodesDirArr, maxAllres) => {
   const dotGraphsTemp = [];
   const dotSupport = [];
   const dotWhere = [];
   const dotOrigins = [];
   const tempList = [];
+
+  // sort based on support
   for (let i = 0; i < gspanOut.support.length; i++) {
     tempList.push({
       graphs: gspanOut.graphs[i],
@@ -180,145 +191,388 @@ const gspanOutToDotGraph = (gspanOut, domFromAllSubdirsUnmodified, nodesDirArr) 
     dotWhere.push(tempList[i].where);
     dotOrigins.push(tempList[i].origins);
   }
+  // -----
 
   //
-  // convert to dot format
-  const dotgraphs = [];
-  const allNodesFromAllSubds = nodesDirArr.flat(10);
-
-  for (let graph of dotGraphsTemp) {
-    dotgraphs.push([]);
-
-    for (let line of graph) {
-      if (line.startsWith("v")) {
-        const nodeLabel = line.split(" ")[2];
-        dotgraphs.at(-1).push(`${line.split(" ")[1]} [label="${nodeLabel}"]`);
-        // TODO the nodeLabel is the clusterlabel and not the node id so I have to change it
-        // dotgraphs
-        //   .at(-1)
-        //   .push(
-        //     `${line.split(" ")[1]} [label="${nodeLabel}${
-        //       nodeLabel > -1 ? ":\n" + allNodesFromAllSubds[nodeLabel].terms.join("\n") : ""
-        //     }"]`
-        //   );
-      } else if (line.startsWith("e")) {
-        dotgraphs.at(-1).push(`${line.split(" ")[1]} -> ${line.split(" ")[2]}`);
-      } else if (line.startsWith("t")) {
-        dotgraphs.at(-1).push(`digraph ${line.split(" ")[2]} {`);
-      }
-    }
-
-    dotgraphs.at(-1).push(`}`);
-  }
-
-  //
-  // make a temporary nodeLabels array to clean up unecessary data
+  // make a temporary nodeLabels array to clean up data
   const nodeLabels = [];
-  for (let i = 0; i < dotgraphs.length; i++) {
-    nodeLabels.push(Array.from(dotgraphs[i].join("\n").matchAll(/^\d+ \[label="(-?\d+)/gm), (x) => x[1]));
+  for (let i = 0; i < dotGraphsTemp.length; i++) {
+    nodeLabels.push(Array.from(dotGraphsTemp[i].join("\n").matchAll(/^v -?\d+ (-?\d+)$/gm), (x) => x[1]));
   }
 
-  // remove dotgraphs that have only -1 labels
+  // remove graphs that have less than 2 numbered labels than are not -1
   for (let i = 0; i < nodeLabels.length; i++) {
-    if (nodeLabels[i].every((x) => x === "-1")) {
-      dotgraphs.splice(i, 1);
+    if (nodeLabels[i].filter((x) => x !== "-1").length < 2) {
+      dotGraphsTemp.splice(i, 1);
       dotWhere.splice(i, 1);
       dotSupport.splice(i, 1);
       dotOrigins.splice(i, 1);
       nodeLabels.splice(i, 1);
+      // nodeEdges.splice(i, 1);
       i--;
     }
   }
 
   // sort and filter to be used for later analyzing and cleanup
   for (let i = 0; i < nodeLabels.length; i++) {
-    nodeLabels[i].sort();
     nodeLabels[i] = nodeLabels[i].filter((x) => x !== "-1");
+    nodeLabels[i].sort();
   }
 
-  // remove frequent trees that are the same as others but with additional -1 labels. Basically remove unecessary -1 labels
-  for (let i = 0; i < nodeLabels.length; i++) {
-    for (let j = 0; j < nodeLabels.length; j++) {
+  //
+  // ------------------------------------------
+
+  const calculateMergeRank = (graphi, graphj, dotWherei, dotWherej, commonWhere) => {
+    let rankAll = [];
+    let total = 0;
+    let rank = 0;
+
+    for (let s of commonWhere) {
+      const si = dotWherei.indexOf(s);
+      const sj = dotWherej.indexOf(s);
+
+      for (let ssi = 0; ssi < graphi[si].length; ssi++) {
+        for (let ssj = 0; ssj < graphj[sj].length; ssj++) {
+          total++;
+          // edges per graph
+          loop1: for (let sssi = 0; sssi < graphi[si][ssi].length; sssi++) {
+            for (let sssj = 0; sssj < graphj[sj][ssj].length; sssj++) {
+              // if they have at least one common edge then I can merge that origin graph
+              if (
+                graphi[si][ssi][sssi][0] === graphj[sj][ssj][sssj][0] &&
+                graphi[si][ssi][sssi][1] === graphj[sj][ssj][sssj][1]
+              ) {
+                rank++;
+                break loop1;
+              }
+            }
+          }
+        }
+      }
+      rankAll.push(rank / total);
+      rank = 0;
+      total = 0;
+    }
+    return rankAll;
+  };
+
+  // -----------------
+
+  const createDotFreqTreeFromOrigin = (graph, dom, maxAllresIdxs, title) => {
+    const freqTree = new Set();
+    freqTree.add(`digraph ${title} {`);
+
+    for (let g of graph) {
+      const index1 = dom.querySelector(`[vertexCounter=${g[0]}]`).getAttribute("customId")?.split(";")[1];
+      const index2 = dom.querySelector(`[vertexCounter=${g[1]}]`).getAttribute("customId")?.split(";")[1];
+      const label1 = index1 !== undefined ? maxAllresIdxs[index1] : "-1";
+      const label2 = index2 !== undefined ? maxAllresIdxs[index2] : "-1";
+      freqTree.add(`${g[0]} [label="${label1}"]`);
+      freqTree.add(`${g[1]} [label="${label2}"]`);
+      freqTree.add(`${g[0]} -> ${g[1]}`);
+    }
+    freqTree.add("}");
+    return [...freqTree];
+  };
+
+  // -------------------
+
+  const mergeOrigin = (graphi, graphj) => {
+    // const commonEdges = [];
+
+    // I use the originalLengthi because the graphi.length increases as I add things to graphi and I only care to compare the original graphs
+    const originalLengthi = graphi.length;
+    loop1: for (let j = 0; j < graphj.length; j++) {
+      for (let i = 0; i < originalLengthi; i++) {
+        if (graphi[i][0] === graphj[j][0] && graphi[i][1] === graphj[j][1]) {
+          // commonEdges.push(graphi[i]);
+          continue loop1;
+        }
+      }
+      graphi.push(graphj[j]);
+    }
+  };
+
+  // ------------------
+
+  // TODOTODO change hard coded values according to queries
+  const cleanFrequentTrees = (dotgraphs, dotOrigins, dotWhere, dotSupport) => {
+    for (let i = 0; i < dotOrigins.length; i++) {
+      if (dotgraphs[i].length > 11) {
+        continue;
+      }
+      let totalGraphs = 0;
+      dotOrigins[i].forEach((graphs) => (totalGraphs += graphs.length));
+      if (totalGraphs < 25) {
+        dotOrigins.splice(i, 1);
+        dotgraphs.splice(i, 1);
+        dotWhere.splice(i, 1);
+        dotSupport.splice(i, 1);
+        i--;
+      }
+    }
+  };
+
+  // -------------------
+
+  const areDotTreesSame = (graph1, graph2) => {
+    const labels1 = [];
+    const labels2 = [];
+    const edges1 = [];
+    const edges2 = [];
+    const tree1 = {};
+    const tree2 = {};
+    for (let g of graph1) {
+      if (g.startsWith("[label=")) {
+        labels1.push(g.split('"')[1]);
+      } else if (g.includes("->")) {
+        const splitted = g.split(" -> ");
+        edges1.push([splitted[0], splitted[1]]);
+      }
+    }
+    for (let g of graph2) {
+      if (g.startsWith("[label=")) {
+        labels2.push(g.split('"')[1]);
+      } else if (g.includes("->")) {
+        const splitted = g.split(" -> ");
+        edges2.push([splitted[0], splitted[1]]);
+      }
+    }
+
+    //
+  };
+
+  //
+  // ------------------------------------------------
+
+  // cleanup and merge frequent trees that are the same as others but with additional -1 labels.
+  for (let i = 0; i < dotOrigins.length; i++) {
+    for (let j = 0; j < dotOrigins.length; j++) {
       if (i === j) {
         continue;
       }
-      if (nodeLabels[j].length > nodeLabels[i].length) {
-        continue;
+
+      // find common subdirectories to merge together later on
+      const commonWhere = dotWhere[i].filter((x) => dotWhere[j].includes(x));
+
+      // calculate how many merges are possible. If the rank of at least one frequent tree is less than 0.8 then abort and go to the next frequent tree comparison
+      const rankAll = calculateMergeRank(dotOrigins[i], dotOrigins[j], dotWhere[i], dotWhere[j], commonWhere);
+      if (rankAll.some((rank) => rank < 0.8)) {
+        break;
       }
-      if (nodeLabels[j].every((x) => nodeLabels[i].includes(x))) {
-        dotgraphs.splice(j, 1);
-        dotWhere.splice(j, 1);
-        dotSupport.splice(j, 1);
-        dotOrigins.splice(j, 1);
-        nodeLabels.splice(j, 1);
-        if (j < i) {
-          i--;
+
+      //
+      for (let s of commonWhere) {
+        // si and sj are made to point at subdirectory s for each of the graphs
+        // the subdirectory s might be at a different index between two graphs if eg. one graph doesn't appear in one subdirectory when their support is different
+        // eg. if one has support at the subdirs [0,3,5] and the other at [3,4,5] and i an at subdir s=3 then it would be si=1 and sj=0 in order for the graph to point to the same subdir
+        const si = dotWhere[i].indexOf(s);
+        const sj = dotWhere[j].indexOf(s);
+
+        // graphs per subdirectory
+        for (let ssi = 0; ssi < dotOrigins[i][si].length; ssi++) {
+          loop1: for (let ssj = 0; ssj < dotOrigins[j][sj].length; ssj++) {
+            // edges per graph
+            for (let sssi = 0; sssi < dotOrigins[i][si][ssi].length; sssi++) {
+              for (let sssj = 0; sssj < dotOrigins[j][sj][ssj].length; sssj++) {
+                // if they have at least one common edge then I can merge that origin graph
+                if (
+                  dotOrigins[i][si][ssi][sssi][0] === dotOrigins[j][sj][ssj][sssj][0] &&
+                  dotOrigins[i][si][ssi][sssi][1] === dotOrigins[j][sj][ssj][sssj][1]
+                ) {
+                  // // I remove the common edge now to not have to compare it again and save time because I know it is a common edge
+                  // dotOrigins[j][sj][ssj].splice(sssj, 1);
+                  mergeOrigin(
+                    dotOrigins[i][si][ssi],
+                    dotOrigins[j][sj][ssj],
+                    dotGraphsTemp[i],
+                    dotGraphsTemp[j],
+                    domFromAllSubdirs[s],
+                    maxAllres.idxs
+                  );
+                  // I remove the graph because I have merged it to the other one
+                  dotOrigins[j][sj].splice(ssj, 1);
+                  continue loop1;
+                }
+              }
+            }
+            // TODO maybe split it to another graph instead of deleting so that i can check it for merging with other graphs
+            // delete origin graphs that couldn't be merged during the merging process because they didn't have common edges with another origin graph
+            dotOrigins[i][si].splice(ssi, 1);
+          }
         }
-        j--;
+
+        // // delete subdirectory from graph if empty
+        // if (dotOrigins[j][sj].length === 0) {
+        //   //dotGraphsTemp[j].splice(sj,1);// move this after here when all origins are deleted
+        //   dotOrigins[j].splice(sj, 1);
+        //   dotWhere[j].splice(sj, 1);
+        //   dotSupport[j] = (parseInt(dotSupport[j]) - 1).toString();
+        // }
+
+        // if (sj < i) {
+        //   i--;
+        // }
+        // j--;
       }
+
+      //----------------
+
+      // // merge the graphs with the help of their origins and change the where and the support
+      // mergeGraphsBasedOnDotOriginsOld(dotGraphsTemp, dotOrigins, dotWhere, i, j);
+      // dotWhere[i] = [...new Set([...dotWhere[i], ...dotWhere[j]])];
+      // dotSupport[i] = dotWhere[i].length.toString();
+      // // remove merged array
+      // dotGraphsTemp.splice(j, 1);
+      // dotWhere.splice(j, 1);
+      // dotSupport.splice(j, 1);
+      // dotOrigins.splice(j, 1);
+      // nodeLabels.splice(j, 1);
+
+      // // position readjustment because i removed an item from the list i was iterating
+      // if (j < i) {
+      //   i--;
+      // }
+      // j--;
+
+      // }
     }
   }
 
-  // create the html rendering of the frequent trees
-  const dotgraphBackRenderedDoms = [];
-  for (let i = 0; i < nodeLabels.length; i++) {
-    const dom = clone(domFromAllSubdirsUnmodified[dotWhere[i][0]]);
-    // dotOrigins.forEach((graph) => {
-    //   graph.forEach((subdir) => {
-    //     subdir.forEach((origin) => {
-    //       origin.forEach((line) => {
-    //         dom
-    //           .querySelector(`[vertexCounter=${line[0]}]`)
-    //           .setAttribute("style", `border-style: solid;border-color: red;border-width: thick;`);
-    //         dom
-    //           .querySelector(`[vertexCounter=${line[1]}]`)
-    //           .setAttribute("style", `border-style: solid;border-color: red;border-width: thick;`);
-    //       });
-    //     });
-    //   });
-    // });
-    dotOrigins.forEach((graph) => {
-      graph[0].forEach((origin) => {
-        origin.forEach((line) => {
-          dom
-            .querySelector(`[vertexCounter=${line[0]}]`)
-            .setAttribute("style", `border-style: solid;border-color: red;border-width: thick;`);
-          dom
-            .querySelector(`[vertexCounter=${line[1]}]`)
-            .setAttribute("style", `border-style: solid;border-color: red;border-width: thick;`);
-        });
-      });
-    });
-
-    // ---
-    // for (let number of nodeLabels[i]) {
-    //   dom
-    //     .querySelector(`[customId$=${number}]`)
-    //     .setAttribute("style", `border-style: solid;border-color: red;border-width: thick;`);
-    // }
-    dotgraphBackRenderedDoms.push(dom.toString());
+  const dotgraphs = [];
+  // TODO allNodesFromAllSubds
+  for (let i = 0; i < dotOrigins.length; i++) {
+    if (dotOrigins[i][0].length === 0) {
+      dotgraphs.push([]);
+      continue;
+    }
+    dotgraphs.push(
+      createDotFreqTreeFromOrigin(
+        dotOrigins[i][0][0],
+        domFromAllSubdirs[dotWhere[i][0]],
+        maxAllres.idxs,
+        dotGraphsTemp[i][0].split(" ")[2]
+      )
+    );
   }
 
-  return { dotgraphs, dotWhere, dotSupport, dotgraphBackRenderedDoms };
+  cleanFrequentTrees(dotgraphs, dotOrigins, dotWhere, dotSupport);
+
+  // //
+  // // convert to dot format
+  // const dotgraphs = [];
+  // const allNodesFromAllSubds = nodesDirArr.flat(10);
+
+  // for (let graph of dotGraphsTemp) {
+  //   dotgraphs.push([]);
+
+  //   for (let line of graph) {
+  //     if (line.startsWith("v")) {
+  //       const nodeLabel = line.split(" ")[2];
+  //       dotgraphs.at(-1).push(`${line.split(" ")[1]} [label="${nodeLabel}"]`);
+  //       // TODO the nodeLabel is the clusterlabel and not the node id so I have to change it
+  //       // dotgraphs
+  //       //   .at(-1)
+  //       //   .push(
+  //       //     `${line.split(" ")[1]} [label="${nodeLabel}${
+  //       //       nodeLabel > -1 ? ":\n" + allNodesFromAllSubds[nodeLabel].terms.join("\n") : ""
+  //       //     }"]`
+  //       //   );
+  //     } else if (line.startsWith("e")) {
+  //       dotgraphs.at(-1).push(`${line.split(" ")[1]} -> ${line.split(" ")[2]}`);
+  //     } else if (line.startsWith("t")) {
+  //       dotgraphs.at(-1).push(`digraph ${line.split(" ")[2]} {`);
+  //     }
+  //   }
+
+  //   dotgraphs.at(-1).push(`}`);
+  // }
+
+  //
+  // create the html rendering of the frequent trees
+  // const dotgraphBackRenderedDoms = [];
+  for (let i = 0; i < dotOrigins.length; i++) {
+    // dotgraphBackRenderedDoms.push([]);
+    for (let j = 0; j < dotWhere[i].length; j++) {
+      // const dom = clone(domFromAllSubdirs[dotWhere[i][j]]);
+      const dom = domFromAllSubdirs[dotWhere[i][j]];
+      const digraphIndex = dotgraphs[i][0].split(" ")[1];
+      //
+      //
+      //TODOTODOTODO save info instead of changing
+      // dotOrigins[i][j].forEach((origin) => {
+      //   origin.forEach((line) => {
+      //     dom
+      //       .querySelector(`[vertexCounter=${line[0]}]`)
+      //       .setAttribute("style", `border-style: solid;border-color: red;border-width: thick;`);
+      //     dom
+      //       .querySelector(`[vertexCounter=${line[1]}]`)
+      //       .setAttribute("style", `border-style: solid;border-color: red;border-width: thick;`);
+      //   });
+      // });
+
+      //
+      dotOrigins[i][j].forEach((origin) => {
+        origin.forEach((line) => {
+          const oldone = dom.querySelector(`[vertexCounter=${line[0]}]`).getAttribute("digraphLabelStylize");
+          if ((oldone && !oldone.includes(`;${digraphIndex};`)) || !oldone) {
+            dom
+              .querySelector(`[vertexCounter=${line[0]}]`)
+              .setAttribute(
+                "digraphLabelStylize",
+                oldone ? oldone + `${digraphIndex};` : `;${digraphIndex};`
+              );
+          }
+
+          const oldtwo = dom.querySelector(`[vertexCounter=${line[1]}]`).getAttribute("digraphLabelStylize");
+          if ((oldtwo && !oldtwo.includes(`;${digraphIndex};`)) || !oldtwo) {
+            dom
+              .querySelector(`[vertexCounter=${line[1]}]`)
+              .setAttribute(
+                "digraphLabelStylize",
+                oldtwo ? oldtwo + `${digraphIndex};` : `;${digraphIndex};`
+              );
+          }
+          //
+        });
+      });
+
+      // dotgraphBackRenderedDoms[i].push(dom.toString());
+    }
+  }
+
+  // not returning dotOrigins due to its size
+  return { dotgraphs, dotWhere, dotSupport };
 };
 
 // ----
 
-const pythonGspan = (sanitizedId, sanitizedUpperNodeLimit) => {
-  const pyArgs = [
-    "-m",
-    "python_lib.gspan_mining",
-    "-s",
-    "2",
-    "-u",
-    sanitizedUpperNodeLimit,
-    "-w",
-    "True",
-    "-d",
-    "True",
-    sanitizedId + "gspanIn.txt",
-  ];
-  const pyProg = spawnSync("python", pyArgs, { maxBuffer: Infinity });
+const pythonGspan = (sanitizedId, sanitizedUpperNodeLimit, sanitizedLowerNodeLimit, sanitizedSupport) => {
+  let pyProg;
+
+  for (let i = sanitizedSupport; i > 1; i--) {
+    const pyArgs = [
+      "-m",
+      "python_lib.gspan_mining",
+      "-s",
+      i,
+      "-l",
+      sanitizedLowerNodeLimit,
+      "-u",
+      sanitizedUpperNodeLimit,
+      "-w",
+      "True",
+      "-d",
+      "True",
+      sanitizedId + "gspanIn.txt",
+    ];
+
+    pyProg = spawnSync("python", pyArgs, { maxBuffer: Infinity });
+
+    if (pyProg.stdout.toString().startsWith("t #")) {
+      break;
+    }
+  }
 
   // remove file for gspan after finishing
   unlinkSync(sanitizedId + "gspanIn.txt");
@@ -376,7 +630,7 @@ const pythonGspan = (sanitizedId, sanitizedUpperNodeLimit) => {
       origins.push([]);
       oldSub = null;
     } else {
-      console.log("Unexptected condition. Check it");
+      console.log("Unexpected condition. Check it");
     }
   }
 
@@ -390,6 +644,7 @@ const convertToGspanFormatAndModifyDom = (domFromAllSubdirs, sanitizedId, maxAll
   let vertexCounter;
   let i;
 
+  // ----starting functions used to iterate the dom with the breadth package----
   // const getChildren = (node) => node.childNodes;
   const getChildren = (node) => {
     // TODO change if i also search for titles as well as texts
@@ -428,7 +683,9 @@ const convertToGspanFormatAndModifyDom = (domFromAllSubdirs, sanitizedId, maxAll
 
     vertexCounter++;
   };
+  // ----ending functions used to iterate the dom with the breadth package-----
 
+  //
   // loop for every subdir
   for (i = 0; i < domFromAllSubdirs.length; i++) {
     vertexCounter = 0;
@@ -547,12 +804,6 @@ const getKmeansNodexNode = (nodesDirArr) => {
   //
   console.log("first");
   const allNodesFromAllSubds = nodesDirArr.flat(10); // allNodesFromAllSubds: all nodes from all subds in one array
-  // let allNodesFromAllSubds = [];
-  // nodesDirArr.forEach((subd) => {
-  //   subd.forEach((node) => {
-  //     allNodesFromAllSubds.push(node);
-  //   });
-  // });
 
   console.log("second with length " + allNodesFromAllSubds.length);
   //
@@ -593,7 +844,7 @@ const getKmeansNodexNode = (nodesDirArr) => {
   for (let c = 2; c < upperLimit; c++) {
     for (let i = 0; i < 40; i++) {
       console.log("in kmeans at c= " + c + " and repeat at i= " + i);
-      // for 10 iterations use the kmpp initialization algorithm
+      // for the first 10 iterations use the kmpp initialization algorithm and for the rest use normal randomization
       let res = skmeans(nodexnode, c, i < 10 ? "kmpp" : null, null, costumDistanceFormula);
       // console.log(res);
       let coef = silhouetteCoefficient(nodexnode, res.idxs, costumDistanceFormula);
@@ -643,11 +894,7 @@ const costumDistanceFormula = (a, b) => {
   let aIndex = a.indexOf(1);
   let bIndex = b.indexOf(1);
   let index;
-  // if (bIndex !== -1) {
-  //   console.log("BOTH");
-  //   console.log("a", a, "aIndex", aIndex);
-  //   console.log("b", b, "bIndex", bIndex);
-  // }
+
   index = aIndex !== -1 ? aIndex : bIndex;
   if (aIndex !== -1 && bIndex !== -1) {
     // console.log("out", -(a[bIndex] - 1));
@@ -660,41 +907,6 @@ const costumDistanceFormula = (a, b) => {
     return aIndex !== -1 ? -(b[index] - 1) : -(a[index] - 1);
     // return -((a[bIndex] + b[aIndex]) / 2 - 1);
   }
-};
-
-// ---
-
-const getCosineSimilarityPerSubd = (nodesDirArr) => {
-  let cosineSimilarityPerSubd = [];
-
-  // allNodeTermsPerSubd: each index is a subdirectory which has all the terms of all the nodes of that subdirectory and the terms are flattened and not in groups of their node
-  // nodeTermsPerSubd: each index is a subdirectory which has the terms of all the nodes of that subdirectory and the terms are in grouped based on their node
-  let allNodeTermsPerSubd = [];
-  let nodeTermsPerSubd = [];
-  nodesDirArr.forEach((subd) => {
-    const TermsInSubd = subd.map((node) => node.terms);
-    allNodeTermsPerSubd.push(TermsInSubd.flat(10));
-    nodeTermsPerSubd.push(TermsInSubd);
-  });
-
-  const allNodeTermsPerSubdBow = allNodeTermsPerSubd.map((subd) => as.bow(subd));
-  const nodeTermsPerSubdBow = nodeTermsPerSubd.map((subd) => {
-    return subd.map((nodeTerms) => as.bow(nodeTerms));
-  });
-
-  for (let i = 0; i < allNodeTermsPerSubdBow.length; i++) {
-    let subdCosineSimilarity = [];
-    for (let k = 0; k < nodeTermsPerSubdBow.length; k++) {
-      for (let j = 0; j < nodeTermsPerSubdBow[k].length; j++) {
-        subdCosineSimilarity.push(
-          similarity.bow.cosine(nodeTermsPerSubdBow[k][j], allNodeTermsPerSubdBow[i])
-        );
-      }
-    }
-    cosineSimilarityPerSubd.push(subdCosineSimilarity);
-  }
-
-  return cosineSimilarityPerSubd;
 };
 
 // ----
@@ -783,89 +995,94 @@ const cssAndImgToAbsoluteHref = (dom, url) => {
   //
 };
 
-const stylizedDomElementsByClusterLabel = (domFromAllSubdirs, maxAllres) => {
+//
+//
+const stylizeDomElementsByClusterLabel = (domFromAllSubdirs, maxAllres) => {
   const palette = distinctColors({ count: maxAllres.k });
 
   for (let dom of domFromAllSubdirs) {
     const nodes = dom.querySelectorAll("[customId]");
     for (let node of nodes) {
       const kmeansClusterLabel = maxAllres.idxs[node.getAttribute("customId").split(";")[1]];
+      // node.setAttribute(
+      //   "style",
+      //   `border-style: solid;border-color: ${palette[kmeansClusterLabel].hex()};border-width: thick;`
+      // );
+
       node.setAttribute(
-        "style",
-        `border-style: solid;border-color: ${palette[kmeansClusterLabel].hex()};border-width: thick;`
+        "nodeLabelAndColorStylize",
+        `${kmeansClusterLabel};${palette[kmeansClusterLabel].hex()}`
       );
     }
   }
+};
 
-  // let label = node.nodeType === 1 ? node.getAttribute("customId") || "-1" : "-1";
-  // const kmeansClusterLabel = label === "-1" ? undefined : maxAllres.idxs[label.split(";")[1]];
-  // // modify dom to display colored border depending on its cluster
-  // if (label !== "-1") {
-  //   node.setAttribute(
-  //     "style",
-  //     `border-style: solid;border-color: ${palette[kmeansClusterLabel].hex()};border-width: thick;`
-  //   );
-  // }
+//
+// merge the graphs and origins at indinces a and b
+const mergeGraphsBasedOnDotOriginsOld = (dotGraphsTemp, dotOrigins, dotWhere, a, b) => {
+  for (let i = 0; i < dotWhere[b].length; i++) {
+    let whereExistsFlag = false;
+    for (let j = 0; j < dotWhere[a].length; j++) {
+      if (dotWhere[b][i] === dotWhere[a][j]) {
+        for (let k = 0; k < dotOrigins[b][i].length; k++) {
+          let originExistsFlag = false;
+          for (let l = 0; l < dotOrigins[a][j].length; l++) {
+            if (
+              dotOrigins[b][i][k].flat(10).sort().toString() ===
+              dotOrigins[a][j][l].flat(10).sort().toString()
+            ) {
+              originExistsFlag = true;
+              break;
+            }
+          }
+          if (originExistsFlag === false) {
+            dotOrigins[a][j].push(dotOrigins[b][i][k]);
+          }
+        }
+        whereExistsFlag = true;
+        break;
+      }
+    }
+
+    if (whereExistsFlag === false) {
+      dotOrigins[a].push(dotOrigins[b][i]);
+    }
+  }
 };
 
 // ====================================================================
 
-// const { parentPort } = require("worker_threads");
+// ---
 
-// // function cpuIntensiveTask(responseTime) {
-// //   console.log("cpuIntensiveTask started......");
-// //   let startTime = Date.now();
-// //   while (Date.now() - startTime < responseTime) {
-// //     const kk = 0;
-// //   }
-// //   console.log("cpuIntensiveTask completed in :" + (Date.now() - startTime) + " ms.");
-// //   return Date.now() - startTime;
-// // }
-// // parentPort.on("message", (message) => {
-// //   console.log(message);
-// //   if (message.command == "SLEEP") {
-// //     setTimeout(() => {
-// //       console.log(
-// //         "\nTest Child Event-Loop :cpuIntensiveTask in child thread blocks this event in child thread!"
-// //       );
-// //     }, 1000);
-// //     console.log("first");
-// //     const result = cpuIntensiveTask(message.responseTime);
-// //     console.log("second");
-// //     parentPort.postMessage("Completeed in :" + result + " ms.");
-// //     console.log("end");
-// //     process.exit();
-// //   }
-// // });
+const getCosineSimilarityPerSubd = (nodesDirArr) => {
+  let cosineSimilarityPerSubd = [];
 
-// // -------------------
+  // allNodeTermsPerSubd: each index is a subdirectory which has all the terms of all the nodes of that subdirectory and the terms are flattened and not in groups of their node
+  // nodeTermsPerSubd: each index is a subdirectory which has the terms of all the nodes of that subdirectory and the terms are in grouped based on their node
+  let allNodeTermsPerSubd = [];
+  let nodeTermsPerSubd = [];
+  nodesDirArr.forEach((subd) => {
+    const TermsInSubd = subd.map((node) => node.terms);
+    allNodeTermsPerSubd.push(TermsInSubd.flat(10));
+    nodeTermsPerSubd.push(TermsInSubd);
+  });
 
-// function outfun() {
-//   let k = 0;
-//   console.log("starting cpu-heavy");
-//   for (let i = 0; i < 50; i++) {
-//     for (let j = 0; j < 99999999; j++) {
-//       k++;
-//     }
-//   }
-//   console.log("ended cpu-heavy");
-//   return k;
-// }
+  const allNodeTermsPerSubdBow = allNodeTermsPerSubd.map((subd) => as.bow(subd));
+  const nodeTermsPerSubdBow = nodeTermsPerSubd.map((subd) => {
+    return subd.map((nodeTerms) => as.bow(nodeTerms));
+  });
 
-// parentPort.on("message", (message) => {
-//   console.log("in worker", message);
-//   if (message.command == "SLEEP") {
-//     setTimeout(() => {
-//       console.log(
-//         "\nTest Child Event-Loop :cpuIntensiveTask in child thread blocks this event in child thread!"
-//       );
-//     }, 20000);
-//     console.log("first");
-//     const result = outfun();
-//     console.log("second");
-//     parentPort.postMessage("in worker found :" + result);
-//     console.log("end");
-//     setTimeout(() => process.exit(), 500);
-//     // process.exit();
-//   }
-// });
+  for (let i = 0; i < allNodeTermsPerSubdBow.length; i++) {
+    let subdCosineSimilarity = [];
+    for (let k = 0; k < nodeTermsPerSubdBow.length; k++) {
+      for (let j = 0; j < nodeTermsPerSubdBow[k].length; j++) {
+        subdCosineSimilarity.push(
+          similarity.bow.cosine(nodeTermsPerSubdBow[k][j], allNodeTermsPerSubdBow[i])
+        );
+      }
+    }
+    cosineSimilarityPerSubd.push(subdCosineSimilarity);
+  }
+
+  return cosineSimilarityPerSubd;
+};
