@@ -345,99 +345,99 @@ const gspanOutToDotGraph = (gspanOut, domFromAllSubdirs, nodesDirArr, maxAllres)
   //
   // ------------------------------------------------
 
-  // cleanup and merge frequent trees that are the same as others but with additional -1 labels.
-  for (let i = 0; i < dotOrigins.length; i++) {
-    for (let j = 0; j < dotOrigins.length; j++) {
-      if (i === j) {
-        continue;
-      }
+  // // cleanup and merge frequent trees that are the same as others but with additional -1 labels.
+  // for (let i = 0; i < dotOrigins.length; i++) {
+  //   for (let j = 0; j < dotOrigins.length; j++) {
+  //     if (i === j) {
+  //       continue;
+  //     }
 
-      // find common subdirectories to merge together later on
-      const commonWhere = dotWhere[i].filter((x) => dotWhere[j].includes(x));
+  //     // find common subdirectories to merge together later on
+  //     const commonWhere = dotWhere[i].filter((x) => dotWhere[j].includes(x));
 
-      // calculate how many merges are possible. If the rank of at least one frequent tree is less than 0.8 then abort and go to the next frequent tree comparison
-      const rankAll = calculateMergeRank(dotOrigins[i], dotOrigins[j], dotWhere[i], dotWhere[j], commonWhere);
-      if (rankAll.some((rank) => rank < 0.8)) {
-        break;
-      }
+  //     // calculate how many merges are possible. If the rank of at least one frequent tree is less than 0.8 then abort and go to the next frequent tree comparison
+  //     const rankAll = calculateMergeRank(dotOrigins[i], dotOrigins[j], dotWhere[i], dotWhere[j], commonWhere);
+  //     if (rankAll.some((rank) => rank < 0.8)) {
+  //       break;
+  //     }
 
-      //
-      for (let s of commonWhere) {
-        // si and sj are made to point at subdirectory s for each of the graphs
-        // the subdirectory s might be at a different index between two graphs if eg. one graph doesn't appear in one subdirectory when their support is different
-        // eg. if one has support at the subdirs [0,3,5] and the other at [3,4,5] and i an at subdir s=3 then it would be si=1 and sj=0 in order for the graph to point to the same subdir
-        const si = dotWhere[i].indexOf(s);
-        const sj = dotWhere[j].indexOf(s);
+  //     //
+  //     for (let s of commonWhere) {
+  //       // si and sj are made to point at subdirectory s for each of the graphs
+  //       // the subdirectory s might be at a different index between two graphs if eg. one graph doesn't appear in one subdirectory when their support is different
+  //       // eg. if one has support at the subdirs [0,3,5] and the other at [3,4,5] and i an at subdir s=3 then it would be si=1 and sj=0 in order for the graph to point to the same subdir
+  //       const si = dotWhere[i].indexOf(s);
+  //       const sj = dotWhere[j].indexOf(s);
 
-        // graphs per subdirectory
-        for (let ssi = 0; ssi < dotOrigins[i][si].length; ssi++) {
-          loop1: for (let ssj = 0; ssj < dotOrigins[j][sj].length; ssj++) {
-            // edges per graph
-            for (let sssi = 0; sssi < dotOrigins[i][si][ssi].length; sssi++) {
-              for (let sssj = 0; sssj < dotOrigins[j][sj][ssj].length; sssj++) {
-                // if they have at least one common edge then I can merge that origin graph
-                if (
-                  dotOrigins[i][si][ssi][sssi][0] === dotOrigins[j][sj][ssj][sssj][0] &&
-                  dotOrigins[i][si][ssi][sssi][1] === dotOrigins[j][sj][ssj][sssj][1]
-                ) {
-                  // // I remove the common edge now to not have to compare it again and save time because I know it is a common edge
-                  // dotOrigins[j][sj][ssj].splice(sssj, 1);
-                  mergeOrigin(
-                    dotOrigins[i][si][ssi],
-                    dotOrigins[j][sj][ssj],
-                    dotGraphsTemp[i],
-                    dotGraphsTemp[j],
-                    domFromAllSubdirs[s],
-                    maxAllres.idxs
-                  );
-                  // I remove the graph because I have merged it to the other one
-                  dotOrigins[j][sj].splice(ssj, 1);
-                  continue loop1;
-                }
-              }
-            }
-            // TODO maybe split it to another graph instead of deleting so that i can check it for merging with other graphs
-            // delete origin graphs that couldn't be merged during the merging process because they didn't have common edges with another origin graph
-            dotOrigins[i][si].splice(ssi, 1);
-          }
-        }
+  //       // graphs per subdirectory
+  //       for (let ssi = 0; ssi < dotOrigins[i][si].length; ssi++) {
+  //         loop1: for (let ssj = 0; ssj < dotOrigins[j][sj].length; ssj++) {
+  //           // edges per graph
+  //           for (let sssi = 0; sssi < dotOrigins[i][si][ssi].length; sssi++) {
+  //             for (let sssj = 0; sssj < dotOrigins[j][sj][ssj].length; sssj++) {
+  //               // if they have at least one common edge then I can merge that origin graph
+  //               if (
+  //                 dotOrigins[i][si][ssi][sssi][0] === dotOrigins[j][sj][ssj][sssj][0] &&
+  //                 dotOrigins[i][si][ssi][sssi][1] === dotOrigins[j][sj][ssj][sssj][1]
+  //               ) {
+  //                 // // I remove the common edge now to not have to compare it again and save time because I know it is a common edge
+  //                 // dotOrigins[j][sj][ssj].splice(sssj, 1);
+  //                 mergeOrigin(
+  //                   dotOrigins[i][si][ssi],
+  //                   dotOrigins[j][sj][ssj],
+  //                   dotGraphsTemp[i],
+  //                   dotGraphsTemp[j],
+  //                   domFromAllSubdirs[s],
+  //                   maxAllres.idxs
+  //                 );
+  //                 // I remove the graph because I have merged it to the other one
+  //                 dotOrigins[j][sj].splice(ssj, 1);
+  //                 continue loop1;
+  //               }
+  //             }
+  //           }
+  //           // TODO maybe split it to another graph instead of deleting so that i can check it for merging with other graphs
+  //           // delete origin graphs that couldn't be merged during the merging process because they didn't have common edges with another origin graph
+  //           dotOrigins[i][si].splice(ssi, 1);
+  //         }
+  //       }
 
-        // // delete subdirectory from graph if empty
-        // if (dotOrigins[j][sj].length === 0) {
-        //   //dotGraphsTemp[j].splice(sj,1);// move this after here when all origins are deleted
-        //   dotOrigins[j].splice(sj, 1);
-        //   dotWhere[j].splice(sj, 1);
-        //   dotSupport[j] = (parseInt(dotSupport[j]) - 1).toString();
-        // }
+  //       // // delete subdirectory from graph if empty
+  //       // if (dotOrigins[j][sj].length === 0) {
+  //       //   //dotGraphsTemp[j].splice(sj,1);// move this after here when all origins are deleted
+  //       //   dotOrigins[j].splice(sj, 1);
+  //       //   dotWhere[j].splice(sj, 1);
+  //       //   dotSupport[j] = (parseInt(dotSupport[j]) - 1).toString();
+  //       // }
 
-        // if (sj < i) {
-        //   i--;
-        // }
-        // j--;
-      }
+  //       // if (sj < i) {
+  //       //   i--;
+  //       // }
+  //       // j--;
+  //     }
 
-      //----------------
+  //     //----------------
 
-      // // merge the graphs with the help of their origins and change the where and the support
-      // mergeGraphsBasedOnDotOriginsOld(dotGraphsTemp, dotOrigins, dotWhere, i, j);
-      // dotWhere[i] = [...new Set([...dotWhere[i], ...dotWhere[j]])];
-      // dotSupport[i] = dotWhere[i].length.toString();
-      // // remove merged array
-      // dotGraphsTemp.splice(j, 1);
-      // dotWhere.splice(j, 1);
-      // dotSupport.splice(j, 1);
-      // dotOrigins.splice(j, 1);
-      // nodeLabels.splice(j, 1);
+  //     // // merge the graphs with the help of their origins and change the where and the support
+  //     // mergeGraphsBasedOnDotOriginsOld(dotGraphsTemp, dotOrigins, dotWhere, i, j);
+  //     // dotWhere[i] = [...new Set([...dotWhere[i], ...dotWhere[j]])];
+  //     // dotSupport[i] = dotWhere[i].length.toString();
+  //     // // remove merged array
+  //     // dotGraphsTemp.splice(j, 1);
+  //     // dotWhere.splice(j, 1);
+  //     // dotSupport.splice(j, 1);
+  //     // dotOrigins.splice(j, 1);
+  //     // nodeLabels.splice(j, 1);
 
-      // // position readjustment because i removed an item from the list i was iterating
-      // if (j < i) {
-      //   i--;
-      // }
-      // j--;
+  //     // // position readjustment because i removed an item from the list i was iterating
+  //     // if (j < i) {
+  //     //   i--;
+  //     // }
+  //     // j--;
 
-      // }
-    }
-  }
+  //     // }
+  //   }
+  // }
 
   const dotgraphs = [];
   // TODO allNodesFromAllSubds
