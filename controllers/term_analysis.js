@@ -8,8 +8,21 @@ const getTermAnalysis = async (req, res) => {
     const sanitizedId = req.query.id?.toString().match(/^[0-9a-f]*$/i)[0];
     let sanitizedUpperNodeLimit = req.query.uppernodelimit?.toString().match(/^[0-9]*$/)[0];
     let sanitizedUpperSubdirNum = req.query.uppersubdirnum?.toString().match(/^[0-9]*$/)[0];
-    sanitizedUpperNodeLimit = sanitizedUpperNodeLimit ? sanitizedUpperNodeLimit : "5";
+    let sanitizedPythonSupport = req.query.pythonsupport?.toString().match(/^[0-9]*$/)[0];
+    let sanitizedLowerNodeLimit = req.query.lowernodelimit?.toString().match(/^[0-9]*$/)[0];
+    let sanitizedPythonUpperNodeLimit = req.query.pythonuppernodelimit?.toString().match(/^[0-9]*$/)[0];
+    let sanitizedPythonLowerNodeLimit = req.query.pythonlowernodelimit?.toString().match(/^[0-9]*$/)[0];
+
+    // sanitizedUpperNodeLimit = sanitizedUpperNodeLimit ? sanitizedUpperNodeLimit : "5";
     sanitizedUpperSubdirNum = sanitizedUpperSubdirNum ? sanitizedUpperSubdirNum : "15";
+
+    // // the sanitizedSupport default happens in the fork where I know the max upper subdir number
+    // sanitizedSupport = sanitizedSupport ? sanitizedSupport : sanitizedUpperSubdirNum;
+    // sanitizedLowerNodeLimit = sanitizedLowerNodeLimit ? sanitizedLowerNodeLimit : "3";
+
+    sanitizedPythonUpperNodeLimit = sanitizedPythonUpperNodeLimit ? sanitizedPythonUpperNodeLimit : "5";
+    sanitizedPythonLowerNodeLimit = sanitizedPythonLowerNodeLimit ? sanitizedPythonLowerNodeLimit : "3";
+
     // ---------------------------------------------TODO use Set to remove duplicates; check for title, not only text
     // save the analysis in the db and here at the beginning check if it exists in the db first and if it doesn't then execute it and save it in the db then
     // maybe even it analyzes for first time add loading animation and say it might take a while
@@ -46,7 +59,15 @@ const getTermAnalysis = async (req, res) => {
     );
 
     const childProcess = fork("./controllers/children/child_termAnalysis");
-    childProcess.send({ sanitizedId, sanitizedUpperNodeLimit, sanitizedUpperSubdirNum });
+    childProcess.send({
+      sanitizedId,
+      sanitizedUpperNodeLimit,
+      sanitizedUpperSubdirNum,
+      sanitizedPythonSupport,
+      sanitizedLowerNodeLimit,
+      sanitizedPythonUpperNodeLimit,
+      sanitizedPythonLowerNodeLimit,
+    });
 
     return res.json(newdAnalysis);
   } catch (error) {

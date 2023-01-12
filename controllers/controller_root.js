@@ -258,6 +258,23 @@ const home = async (req, res) => {
   // console.log("freqtable", as.freqTable(tok));
   // console.log("type", its.value(tok));
   // res.json(JSON.parse(bm25.out(its.modelJSON)));
+
+  // const DB_Model_Sites = require("../db/Model_Site");
+  // const sites = await DB_Model_Sites.find({ _id: "62bb47e18040613b715c98f4" });
+  // const q = 4;
+  // try {
+  //   const a = await DB_Model_Sites.findOneAndUpdate(
+  //     { _id: "62bb47e18040613b715c98f4" },
+  //     { html: sites[0].html },
+  //     {
+  //       new: true,
+  //       runValidators: true,
+  //     }
+  //   );
+  //   const q = 4;
+  // } catch (error) {
+  //   console.log(error.message);
+  // }
   res.send("HomePage");
 };
 
