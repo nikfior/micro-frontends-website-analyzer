@@ -186,10 +186,12 @@ const childTermAnalysis = async (
 const gspanOutToDotGraph = (gspanOut, domFromAllSubdirs, nodesDirArr, maxAllres) => {
   const minSupport = Math.min(...gspanOut.support);
 
-  const dotGraphsTemp = [];
+  const numOfDigraphsToKeep = 10;
+
+  let dotGraphsTemp = [];
   let dotSupport = [];
-  const dotWhere = [];
-  const dotOrigins = [];
+  let dotWhere = [];
+  let dotOrigins = [];
   const tempList = [];
 
   // sort based on support
@@ -201,9 +203,15 @@ const gspanOutToDotGraph = (gspanOut, domFromAllSubdirs, nodesDirArr, maxAllres)
       origins: gspanOut.origins[i],
     });
   }
+  // sort descending based on support. If support is the same then sort descending based on size of graph tree
   tempList.sort((a, b) => {
-    return b.support - a.support;
+    const sorter = b.support - a.support;
+    if (sorter === 0) {
+      return b.graphs.length - a.graphs.length;
+    }
+    return sorter;
   });
+
   for (let i = 0; i < gspanOut.support.length; i++) {
     dotGraphsTemp.push(tempList[i].graphs);
     dotSupport.push(tempList[i].support);
@@ -213,11 +221,11 @@ const gspanOutToDotGraph = (gspanOut, domFromAllSubdirs, nodesDirArr, maxAllres)
   // -----
 
   //
-  // make a temporary nodeLabels array to clean up data
-  const nodeLabels = [];
-  for (let i = 0; i < dotGraphsTemp.length; i++) {
-    nodeLabels.push(Array.from(dotGraphsTemp[i].join("\n").matchAll(/^v -?\d+ (-?\d+)$/gm), (x) => x[1]));
-  }
+  // // make a temporary nodeLabels array to clean up data
+  // const nodeLabels = [];
+  // for (let i = 0; i < dotGraphsTemp.length; i++) {
+  //   nodeLabels.push(Array.from(dotGraphsTemp[i].join("\n").matchAll(/^v -?\d+ (-?\d+)$/gm), (x) => x[1]));
+  // }
 
   // // remove graphs that have less than 2 numbered labels than are not -1
   // for (let i = 0; i < nodeLabels.length; i++) {
@@ -468,7 +476,7 @@ const gspanOutToDotGraph = (gspanOut, domFromAllSubdirs, nodesDirArr, maxAllres)
 
   // -----------------
 
-  const isDuplicateInMerged = (newMerged0, newMergedList) => {
+  const isItDuplicateInList = (newMerged0, newMergedList) => {
     let j, i, k;
     for (j = 0; j < newMergedList.length; j++) {
       if (newMerged0.length !== newMergedList[j][0][0].length) {
@@ -649,64 +657,90 @@ const gspanOutToDotGraph = (gspanOut, domFromAllSubdirs, nodesDirArr, maxAllres)
     //
   };
 
+  // -------------------
+
+  const keepLargestTreesCleanUp = (dotGraphsTemp, dotWhere, dotOrigins) => {
+    // delete smaller frequent trees in order to reduce memory usage during merging. Keeps trees with the highest edges/vertices available
+    const largestLength = Math.max(...dotGraphsTemp.map((x) => x.length));
+    for (let i = 1; i < dotGraphsTemp.length; i++) {
+      if (largestLength > dotGraphsTemp[i].length) {
+        dotGraphsTemp.splice(i, 1);
+        dotWhere.splice(i, 1);
+        // dotSupport.splice(i,1);
+        dotOrigins.splice(i, 1);
+      }
+    }
+  };
+
   //
   // ------------------------------------------------
 
+  keepLargestTreesCleanUp(dotGraphsTemp, dotWhere, dotOrigins);
   const newMergedList = [];
   const newWhereList = [];
   const newGraphsList = [];
 
-  for (let i = 0; i < dotOrigins.length; i++) {
-    for (let j = i + 1; j < dotOrigins.length; j++) {
-      // if (i === j) {
-      //   continue;
-      // }
+  do {
+    // merging process
+    for (let i = 0; i < dotOrigins.length; i++) {
+      for (let j = i + 1; j < dotOrigins.length; j++) {
+        //
 
-      // find common subdirectories to merge together later on
-      const commonWhere = dotWhere[i].filter((x) => dotWhere[j].includes(x));
+        // find common subdirectories to merge together later on
+        const commonWhere = dotWhere[i].filter((x) => dotWhere[j].includes(x));
 
-      // const rankAll = calculateMergeRank(dotOrigins[i], dotOrigins[j], dotWhere[i], dotWhere[j], commonWhere);
-      // // if rank and support of merged tree is less that required then don't merge
-      // if (rankAll.filter((rank) => rank > 0.4).length < minSupport) {
-      //   continue;
-      // }
+        // const rankAll = calculateMergeRank(dotOrigins[i], dotOrigins[j], dotWhere[i], dotWhere[j], commonWhere);
+        // // if rank and support of merged tree is less that required then don't merge
+        // if (rankAll.filter((rank) => rank > 0.4).length < minSupport) {
+        //   continue;
+        // }
 
-      //
-      const { newMerged, newWhere } = createMergeOrigin(
-        dotOrigins[i],
-        dotOrigins[j],
-        dotWhere[i],
-        dotWhere[j],
-        commonWhere,
-        minSupport
-      );
-
-      // create graphs from all the different origin combinations
-      for (let o = 0; o < newMerged.length; o++) {
-        // check if merge already exists from previous merge
-        if (isDuplicateInMerged(newMerged[o][0][0], newMergedList)) {
-          continue;
-        }
-
-        const tempGraph = createTempGraphFromOrigin(
-          newMerged[o][0][0],
-          domFromAllSubdirs[newWhere[o][0]],
-          maxAllres.idxs
+        //
+        const { newMerged, newWhere } = createMergeOrigin(
+          dotOrigins[i],
+          dotOrigins[j],
+          dotWhere[i],
+          dotWhere[j],
+          commonWhere,
+          minSupport
         );
 
-        newMergedList.push(newMerged[o]);
-        newWhereList.push(newWhere[o]);
-        newGraphsList.push(tempGraph);
-      }
+        for (let o = 0; o < newMerged.length; o++) {
+          // check if merge already exists from previous merge or in the dotOrigins
+          if (
+            isItDuplicateInList(newMerged[o][0][0], newMergedList) ||
+            isItDuplicateInList(newMerged[o][0][0], dotOrigins)
+          ) {
+            continue;
+          }
 
-      // ----------------
+          const tempGraph = createTempGraphFromOrigin(
+            newMerged[o][0][0],
+            domFromAllSubdirs[newWhere[o][0]],
+            maxAllres.idxs
+          );
+
+          newMergedList.push(newMerged[o]);
+          newWhereList.push(newWhere[o]);
+          newGraphsList.push(tempGraph);
+        }
+
+        // ----------------
+      }
     }
-  }
+
+    dotGraphsTemp.push(...newGraphsList);
+    dotOrigins.push(...newMergedList);
+    dotWhere.push(...newWhereList);
+    keepLargestTreesCleanUp(dotGraphsTemp, dotWhere, dotOrigins);
+
+    //
+  } while (newMergedList.length !== 0);
 
   // unite merged and first
-  dotGraphsTemp.push(...newGraphsList);
-  dotOrigins.push(...newMergedList);
-  dotWhere.push(...newWhereList);
+  // dotGraphsTemp.push(...newGraphsList);
+  // dotOrigins.push(...newMergedList);
+  // dotWhere.push(...newWhereList);
   dotSupport = dotWhere.map((w) => {
     return w.length;
   });
