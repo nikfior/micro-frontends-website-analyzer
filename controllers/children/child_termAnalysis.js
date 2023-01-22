@@ -17,6 +17,7 @@ const { breadth } = require("treeverse");
 const { writeFileSync, unlinkSync } = require("fs");
 const { spawnSync } = require("child_process");
 const distinctColors = require("distinct-colors").default; // TODO make 20 nice distinct colors and make the global for each nodeLabel
+var palette;
 // const clone = require("clone");
 
 // ----
@@ -142,8 +143,8 @@ const childTermAnalysis = async (
         )}. Also subdirnum=${sanitizedUpperSubdirNum}; sanitizedPythonUpperNodeLimit=${sanitizedPythonUpperNodeLimit} and sanitizedPythonLowerNodeLimit=${sanitizedPythonLowerNodeLimit}`,
         analysis: {
           dotgraphTrees,
-          gspanOut: { graphs: gspanOut.graphs, support: gspanOut.support, where: gspanOut.where }, // removed gspanOut.origins
-          gspanIn,
+          // gspanOut: { graphs: gspanOut.graphs, support: gspanOut.support, where: gspanOut.where }, // removed gspanOut.origins
+          // gspanIn,
 
           clusteredBow,
           // testcluster: [...testcluster],
@@ -515,15 +516,38 @@ const gspanOutToDotGraph = (gspanOut, domFromAllSubdirs, nodesDirArr, maxAllres)
   // -----------------
 
   const addStylesForDotGraphsInDoms = (dotOrigins, dotWhere, domFromAllSubdirs, dotGraphs) => {
+    // // ----find height of origin tree----
+    // let numCommonVertex = 0;
+    // for (let i = 0; i < dotOrigins.length; i++) {
+    //   for (let j = i + 1; j < dotOrigins.length; j++) {
+    //     if (dotOrigins[i][0] === dotOrigins[j][0]) {
+    //       numCommonVertex++;
+    //     }
+    //   }
+    // }
+    // const treeHeight = dotOrigins.length - numCommonVertex + 1;
+    // // ---- end finding tree height----
+
     // const dotgraphBackRenderedDoms = [];
     for (let i = 0; i < dotOrigins.length; i++) {
+      //
+      // ----color the dotgraph as well to match with the html----
+      for (let k = 0; k < dotGraphs[i].length; k++) {
+        const match = dotGraphs[i][k].match(/\d+ \[label="(\d+)/);
+        if (match) {
+          dotGraphs[i][k] =
+            dotGraphs[i][k].slice(0, -1) +
+            ` fontcolor="${palette[match[1]].hex()}" color="${palette[match[1]].hex()}"]`;
+        }
+      }
+      // ----ending coloring dotgraph----
+
       // dotgraphBackRenderedDoms.push([]);
       for (let j = 0; j < dotWhere[i].length; j++) {
         // const dom = clone(domFromAllSubdirs[dotWhere[i][j]]);
         const dom = domFromAllSubdirs[dotWhere[i][j]];
         const digraphIndex = dotGraphs[i][0].split(" ")[1];
-        //
-        //
+
         // // mutates the dom itself for the display
         // dotOrigins[i][j].forEach((origin) => {
         //   origin.forEach((line) => {
@@ -536,7 +560,6 @@ const gspanOutToDotGraph = (gspanOut, domFromAllSubdirs, nodesDirArr, maxAllres)
         //   });
         // });
 
-        //
         dotOrigins[i][j].forEach((origin) => {
           origin.forEach((line) => {
             const oldone = dom
@@ -662,12 +685,13 @@ const gspanOutToDotGraph = (gspanOut, domFromAllSubdirs, nodesDirArr, maxAllres)
   const keepLargestTreesCleanUp = (dotGraphsTemp, dotWhere, dotOrigins) => {
     // delete smaller frequent trees in order to reduce memory usage during merging. Keeps trees with the highest edges/vertices available
     const largestLength = Math.max(...dotGraphsTemp.map((x) => x.length));
-    for (let i = 1; i < dotGraphsTemp.length; i++) {
+    for (let i = 0; i < dotGraphsTemp.length; i++) {
       if (largestLength > dotGraphsTemp[i].length) {
         dotGraphsTemp.splice(i, 1);
         dotWhere.splice(i, 1);
         // dotSupport.splice(i,1);
         dotOrigins.splice(i, 1);
+        i--;
       }
     }
   };
@@ -750,7 +774,7 @@ const gspanOutToDotGraph = (gspanOut, domFromAllSubdirs, nodesDirArr, maxAllres)
   addStylesForDotGraphsInDoms(dotOrigins, dotWhere, domFromAllSubdirs, dotGraphs);
 
   // not returning dotOrigins due to its size
-  return { dotGraphs, dotWhere, dotSupport };
+  return { dotGraphs, dotWhere, dotSupport, dotGraphsTemp };
 };
 
 // ----
@@ -1211,7 +1235,7 @@ const cssAndImgToAbsoluteHref = (dom, url) => {
 //
 //
 const stylizeDomElementsByClusterLabel = (domFromAllSubdirs, maxAllres) => {
-  const palette = distinctColors({ count: maxAllres.k });
+  palette = distinctColors({ count: maxAllres.k });
 
   for (let dom of domFromAllSubdirs) {
     const nodes = dom.querySelectorAll("[customId]");
