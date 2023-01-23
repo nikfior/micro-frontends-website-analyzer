@@ -18,6 +18,7 @@ const { writeFileSync, unlinkSync } = require("fs");
 const { spawnSync } = require("child_process");
 const distinctColors = require("distinct-colors").default; // TODO make 20 nice distinct colors and make the global for each nodeLabel
 var palette;
+const max_old_space_size = require("v8").getHeapStatistics().total_available_size / 1024 / 1024;
 // const clone = require("clone");
 
 // ----
@@ -132,7 +133,7 @@ const childTermAnalysis = async (
 
     console.log("Before gspanOutToDotGraph");
     const dotgraphTrees = gspanOut.graphs
-      ? gspanOutToDotGraph(gspanOut, domFromAllSubdirs, nodesDirArr, maxAllres)
+      ? gspanOutToDotGraph(gspanOut, domFromAllSubdirs, clusteredBow, maxAllres)
       : null;
 
     const newAnalysis = await DB_Model_Analysis.findOneAndUpdate(
@@ -184,71 +185,132 @@ const childTermAnalysis = async (
 
 // ----
 
-const gspanOutToDotGraph = (gspanOut, domFromAllSubdirs, nodesDirArr, maxAllres) => {
+const gspanOutToDotGraph = (gspanOut, domFromAllSubdirs, clusteredBow, maxAllres) => {
   const minSupport = Math.min(...gspanOut.support);
 
-  const numOfDigraphsToKeep = 10;
+  const numOfDigraphsToKeep = 20;
 
-  let dotGraphsTemp = [];
-  let dotSupport = [];
-  let dotWhere = [];
-  let dotOrigins = [];
-  const tempList = [];
+  // let dotGraphsTemp = [];
+  // let dotSupport = [];
+  // let dotWhere = [];
+  // let dotOrigins = [];
+  // const tempList = [];
 
-  // sort based on support
-  for (let i = 0; i < gspanOut.support.length; i++) {
-    tempList.push({
-      graphs: gspanOut.graphs[i],
-      support: gspanOut.support[i],
-      where: gspanOut.where[i],
-      origins: gspanOut.origins[i],
-    });
-  }
-  // sort descending based on support. If support is the same then sort descending based on size of graph tree
-  tempList.sort((a, b) => {
-    const sorter = b.support - a.support;
-    if (sorter === 0) {
-      return b.graphs.length - a.graphs.length;
-    }
-    return sorter;
-  });
+  // // sort based on support
+  // for (let i = 0; i < gspanOut.support.length; i++) {
+  //   tempList.push({
+  //     graphs: gspanOut.graphs[i],
+  //     support: gspanOut.support[i],
+  //     where: gspanOut.where[i],
+  //     origins: gspanOut.origins[i],
+  //   });
+  // }
+  // // sort descending based on support. If support is the same then sort descending based on size of graph tree
+  // tempList.sort((a, b) => {
+  //   const sorter = b.support - a.support;
+  //   if (sorter === 0) {
+  //     return b.graphs.length - a.graphs.length;
+  //   }
+  //   return sorter;
+  // });
 
-  for (let i = 0; i < gspanOut.support.length; i++) {
-    dotGraphsTemp.push(tempList[i].graphs);
-    dotSupport.push(tempList[i].support);
-    dotWhere.push(tempList[i].where);
-    dotOrigins.push(tempList[i].origins);
-  }
+  // for (let i = 0; i < gspanOut.support.length; i++) {
+  //   dotGraphsTemp.push(tempList[i].graphs);
+  //   dotSupport.push(tempList[i].support);
+  //   dotWhere.push(tempList[i].where);
+  //   dotOrigins.push(tempList[i].origins);
+  // }
+
   // -----
 
   //
-  // // make a temporary nodeLabels array to clean up data
-  // const nodeLabels = [];
-  // for (let i = 0; i < dotGraphsTemp.length; i++) {
-  //   nodeLabels.push(Array.from(dotGraphsTemp[i].join("\n").matchAll(/^v -?\d+ (-?\d+)$/gm), (x) => x[1]));
-  // }
-
-  // // remove graphs that have less than 2 numbered labels than are not -1
-  // for (let i = 0; i < nodeLabels.length; i++) {
-  //   if (nodeLabels[i].filter((x) => x !== "-1").length < 2) {
-  //     dotGraphsTemp.splice(i, 1);
-  //     dotWhere.splice(i, 1);
-  //     dotSupport.splice(i, 1);
-  //     dotOrigins.splice(i, 1);
-  //     nodeLabels.splice(i, 1);
-  //     // nodeEdges.splice(i, 1);
-  //     i--;
-  //   }
-  // }
-
-  // // sort and filter to be used for later analyzing and cleanup
-  // for (let i = 0; i < nodeLabels.length; i++) {
-  //   nodeLabels[i] = nodeLabels[i].filter((x) => x !== "-1");
-  //   nodeLabels[i].sort();
-  // }
-
-  //
   // ------------------------------------------
+
+  // sort the trees based on support, number of edges, number of numbered labels (non -1) on the vertices and number of origins
+  const sortTreesBasedOnSupportEdgeLabelsOrigins = (graphs, support, where, origins) => {
+    const tempList = [];
+
+    const nodeLabels = [];
+    for (let i = 0; i < graphs.length; i++) {
+      nodeLabels.push(Array.from(graphs[i].join("\n").matchAll(/^v -?\d+ (\d+)$/gm), (x) => x[1]));
+    }
+
+    for (let i = 0; i < support.length; i++) {
+      tempList.push({
+        graphs: graphs[i],
+        support: support[i],
+        where: where[i],
+        origins: origins[i],
+        nodeLabel: nodeLabels[i],
+      });
+    }
+    // sorting
+    tempList.sort((a, b) => {
+      const sorter = b.support - a.support;
+      if (sorter === 0) {
+        const sorter2 = b.nodeLabel.length - a.nodeLabel.length;
+        if (sorter2 === 0) {
+          const sorter3 = b.graphs.length - a.graphs.length;
+          if (sorter3 === 0) {
+            const boriglen = b.origins.reduce((len, x) => len + x.length, 0);
+            const aoriglen = a.origins.reduce((len, x) => len + x.length, 0);
+            return boriglen - aoriglen;
+          }
+          return sorter3;
+        }
+        return sorter2;
+      }
+      return sorter;
+    });
+
+    let dotGraphsTemp = [];
+    let dotSupport = [];
+    let dotWhere = [];
+    let dotOrigins = [];
+
+    for (let i = 0; i < support.length; i++) {
+      dotGraphsTemp.push(tempList[i].graphs);
+      dotSupport.push(tempList[i].support);
+      dotWhere.push(tempList[i].where);
+      dotOrigins.push(tempList[i].origins);
+    }
+
+    return { dotGraphsTemp, dotSupport, dotWhere, dotOrigins };
+  };
+
+  // -----------------
+
+  const deleteTreesBasedOnNumberedLabels = (dotGraphsTemp, dotWhere, dotOrigins) => {
+    // if the number of trees is small (less than 10), then do nothing
+    if (dotOrigins.length < 10) {
+      return;
+    }
+
+    // make a temporary nodeLabels array to clean up data
+    const nodeLabels = [];
+    for (let i = 0; i < dotGraphsTemp.length; i++) {
+      nodeLabels.push(Array.from(dotGraphsTemp[i].join("\n").matchAll(/^v -?\d+ (\d+)$/gm), (x) => x[1]));
+    }
+    // remove graphs that have less than 1 numbered labels (when I say numbered I mean non -1). Basically remove trees with only -1
+    for (let i = 0; i < nodeLabels.length; i++) {
+      if (nodeLabels[i].length < 1) {
+        dotGraphsTemp.splice(i, 1);
+        dotWhere.splice(i, 1);
+        // dotSupport.splice(i, 1);
+        dotOrigins.splice(i, 1);
+        nodeLabels.splice(i, 1);
+        // nodeEdges.splice(i, 1);
+        i--;
+      }
+    }
+    // // sort and filter to be used for later analyzing and cleanup
+    // for (let i = 0; i < nodeLabels.length; i++) {
+    //   nodeLabels[i] = nodeLabels[i].filter((x) => x !== "-1");
+    //   nodeLabels[i].sort();
+    // }
+  };
+
+  // -----------------
 
   const calculateMergeRank = (graphi, graphj, dotWherei, dotWherej, commonWhere) => {
     let rankAll = [];
@@ -292,6 +354,11 @@ const gspanOutToDotGraph = (gspanOut, domFromAllSubdirs, nodesDirArr, maxAllres)
   const createMergeOrigin = (graphi, graphj, dotWherei, dotWherej, commonWhere, minSupport) => {
     const newMerged = [];
     const newWhere = [];
+
+    // about the indices that come from index=tempCommonEdges.join(";"). indices that i have found are duplicate of others so i can omit them
+    const indicesToOmit = [];
+    // I use the below list to check the new tempEdges for duplicates in isItDuplicateInList. I would use the commonEdges but it's not in a convenient format that isItDuplicateInList wants. Also it's a bit better for speed
+    const originsListToCheckAgainstNewIndexForDuplicate = {};
 
     // it saves the different kind of common edges that may exist between two graphs in each subdirectory and saves the new merged graph that comes from that. Each key of the object is a combination of the index of the common edges and the value is a number that indicates the subdirectory which in turn is a key for an object where the values is a list which lists all the different merged trees that come from this merge.
     // eg. if graph ssi=3 and graph ssj=6 at subdirectory s=1 have two common edges at sssi=2 and sssj=4 and another two at ssi=3 and ssj=5, then commonEdges would be commonEdges['2,4;3,5'][1]=[ [[xx1,x2], [xx3,xx4],[xx5,xx6]] , [...] ] where xx are the different edges that come as a result of the merge (basically add the edges from both graphs and remove doubles).
@@ -348,6 +415,28 @@ const gspanOutToDotGraph = (gspanOut, domFromAllSubdirs, nodesDirArr, maxAllres)
 
           if (tempCommonEdges.length > 0) {
             const index = tempCommonEdges.join(";");
+
+            if (indicesToOmit.includes(index)) {
+              continue;
+            }
+            if (s === commonWhere[0]) {
+              maxNumEdges = tempEdges.length > maxNumEdges ? tempEdges.length : maxNumEdges;
+              if (
+                (!originsListToCheckAgainstNewIndexForDuplicate[index] &&
+                  isItDuplicateInList(
+                    tempEdges,
+                    Object.values(originsListToCheckAgainstNewIndexForDuplicate)
+                  )) ||
+                tempEdges.length < maxNumEdges
+              ) {
+                indicesToOmit.push(index);
+                continue;
+              }
+              if (!originsListToCheckAgainstNewIndexForDuplicate[index]) {
+                originsListToCheckAgainstNewIndexForDuplicate[index] = [[tempEdges]];
+              }
+            }
+
             if (commonEdges[index] === undefined) {
               commonEdges[index] = {};
             }
@@ -373,7 +462,11 @@ const gspanOutToDotGraph = (gspanOut, domFromAllSubdirs, nodesDirArr, maxAllres)
     }
 
     for (let o of Object.values(commonEdges)) {
-      if (Object.keys(o).length < minSupport) {
+      if (
+        Object.keys(o).length < minSupport ||
+        isItDuplicateInList(o[0][0], newMerged) ||
+        o[0][0].length < maxNumEdges
+      ) {
         continue;
       }
 
@@ -451,7 +544,7 @@ const gspanOutToDotGraph = (gspanOut, domFromAllSubdirs, nodesDirArr, maxAllres)
 
   // -----------------
 
-  const createDotGraphsFromDotGraphsTemp = (dotGraphsTemp) => {
+  const createDotGraphsFromDotGraphsTemp = (dotGraphsTemp, clusteredBow) => {
     let title = 0;
     const dotGraphs = [];
 
@@ -461,7 +554,14 @@ const gspanOutToDotGraph = (gspanOut, domFromAllSubdirs, nodesDirArr, maxAllres)
       for (let i = 1; i < graph.length; i++) {
         if (graph[i].startsWith("v")) {
           const num = graph[i].split(" ");
-          dotg.push(`${num[1]} [label="${num[2]}; ${num[1]}"]`);
+          const words =
+            num[2] !== "-1"
+              ? Object.entries(clusteredBow[num[2]])
+                  .map((x) => `${x[0]}  ${x[1]}`)
+                  .slice(0, 20)
+                  .join("\n")
+              : "";
+          dotg.push(`${num[1]} [label="${num[2]}; (${num[1]})\n${words}"]`);
         } else if (graph[i].startsWith("e")) {
           const num = graph[i].split(" ");
           dotg.push(`${num[1]} -> ${num[2]}`);
@@ -476,7 +576,7 @@ const gspanOutToDotGraph = (gspanOut, domFromAllSubdirs, nodesDirArr, maxAllres)
   };
 
   // -----------------
-
+  // checks if an origin already exists in a list of origins. The list must be in the form of dotOrigins
   const isItDuplicateInList = (newMerged0, newMergedList) => {
     let j, i, k;
     for (j = 0; j < newMergedList.length; j++) {
@@ -514,6 +614,41 @@ const gspanOutToDotGraph = (gspanOut, domFromAllSubdirs, nodesDirArr, maxAllres)
   };
 
   // -----------------
+  // checks if a tempGraph already exists in a list of newTempGraphsList
+  const isTempGraphDuplicateInList = (tempGraph, newTempGraphsList) => {
+    let i, j, k;
+    for (i = 0; i < newTempGraphsList.length; i++) {
+      if (tempGraph.length !== newTempGraphsList[i].length) {
+        continue;
+      }
+
+      //
+      for (let j = 0; j < tempGraph.length; j++) {
+        //
+
+        for (k = 0; k < tempGraph.length; k++) {
+          if (tempGraph[j] === newTempGraphsList[i][k]) {
+            break;
+          }
+        }
+
+        if (k === tempGraph.length) {
+          break;
+        }
+
+        //
+      }
+      if (j === tempGraph.length) {
+        return true;
+      }
+
+      //
+    }
+
+    return false;
+  };
+
+  // -----------------
 
   const addStylesForDotGraphsInDoms = (dotOrigins, dotWhere, domFromAllSubdirs, dotGraphs) => {
     // // ----find height of origin tree----
@@ -537,7 +672,7 @@ const gspanOutToDotGraph = (gspanOut, domFromAllSubdirs, nodesDirArr, maxAllres)
         if (match) {
           dotGraphs[i][k] =
             dotGraphs[i][k].slice(0, -1) +
-            ` fontcolor="${palette[match[1]].hex()}" color="${palette[match[1]].hex()}"]`;
+            ` fontcolor="${palette[match[1]].hex()}" color="${palette[match[1]].hex()}" penwidth="5"]`;
         }
       }
       // ----ending coloring dotgraph----
@@ -560,34 +695,28 @@ const gspanOutToDotGraph = (gspanOut, domFromAllSubdirs, nodesDirArr, maxAllres)
         //   });
         // });
 
-        dotOrigins[i][j].forEach((origin) => {
-          origin.forEach((line) => {
-            const oldone = dom
-              .querySelector(`[vertexCounter=${line[0]}]`)
-              .getAttribute("digraphLabelStylize");
+        for (const origin of dotOrigins[i][j]) {
+          for (const line of origin) {
+            const olddomone = dom.querySelector(`[vertexCounter=${line[0]}]`);
+            const oldone = olddomone.getAttribute("digraphLabelStylize");
             if ((oldone && !oldone.includes(`;${digraphIndex};`)) || !oldone) {
-              dom
-                .querySelector(`[vertexCounter=${line[0]}]`)
-                .setAttribute(
-                  "digraphLabelStylize",
-                  oldone ? oldone + `${digraphIndex};` : `;${digraphIndex};`
-                );
+              olddomone.setAttribute(
+                "digraphLabelStylize",
+                oldone ? oldone + `${digraphIndex};` : `;${digraphIndex};`
+              );
             }
 
-            const oldtwo = dom
-              .querySelector(`[vertexCounter=${line[1]}]`)
-              .getAttribute("digraphLabelStylize");
+            const olddomtwo = dom.querySelector(`[vertexCounter=${line[1]}]`);
+            const oldtwo = olddomtwo.getAttribute("digraphLabelStylize");
             if ((oldtwo && !oldtwo.includes(`;${digraphIndex};`)) || !oldtwo) {
-              dom
-                .querySelector(`[vertexCounter=${line[1]}]`)
-                .setAttribute(
-                  "digraphLabelStylize",
-                  oldtwo ? oldtwo + `${digraphIndex};` : `;${digraphIndex};`
-                );
+              olddomtwo.setAttribute(
+                "digraphLabelStylize",
+                oldtwo ? oldtwo + `${digraphIndex};` : `;${digraphIndex};`
+              );
             }
             //
-          });
-        });
+          }
+        }
 
         // dotgraphBackRenderedDoms[i].push(dom.toString());
       }
@@ -683,6 +812,11 @@ const gspanOutToDotGraph = (gspanOut, domFromAllSubdirs, nodesDirArr, maxAllres)
   // -------------------
 
   const keepLargestTreesCleanUp = (dotGraphsTemp, dotWhere, dotOrigins) => {
+    // if the number of trees is small (less than 10), then do nothing
+    if (dotOrigins.length < 10) {
+      return;
+    }
+
     // delete smaller frequent trees in order to reduce memory usage during merging. Keeps trees with the highest edges/vertices available
     const largestLength = Math.max(...dotGraphsTemp.map((x) => x.length));
     for (let i = 0; i < dotGraphsTemp.length; i++) {
@@ -699,12 +833,25 @@ const gspanOutToDotGraph = (gspanOut, domFromAllSubdirs, nodesDirArr, maxAllres)
   //
   // ------------------------------------------------
 
-  keepLargestTreesCleanUp(dotGraphsTemp, dotWhere, dotOrigins);
-  const newMergedList = [];
-  const newWhereList = [];
-  const newGraphsList = [];
+  let { dotGraphsTemp, dotSupport, dotWhere, dotOrigins } = sortTreesBasedOnSupportEdgeLabelsOrigins(
+    gspanOut.graphs,
+    gspanOut.support,
+    gspanOut.where,
+    gspanOut.origins
+  );
 
-  do {
+  keepLargestTreesCleanUp(dotGraphsTemp, dotWhere, dotOrigins);
+  deleteTreesBasedOnNumberedLabels(dotGraphsTemp, dotWhere, dotOrigins);
+  let maxNumEdges = dotOrigins[0][0][0].length;
+  let newMergedList;
+  let newWhereList;
+  let newTempGraphsList;
+
+  doloop: do {
+    newMergedList = [];
+    newWhereList = [];
+    newTempGraphsList = [];
+
     // merging process
     for (let i = 0; i < dotOrigins.length; i++) {
       for (let j = i + 1; j < dotOrigins.length; j++) {
@@ -744,31 +891,71 @@ const gspanOutToDotGraph = (gspanOut, domFromAllSubdirs, nodesDirArr, maxAllres)
             maxAllres.idxs
           );
 
+          // second check for duplicates based on the tempGraph as opposed to the first origin because sometimes the origins are not in the same order and the first origin that I check can be elsewhere. Maybe the previous check isItDuplicateInList has become obsolete now
+          if (
+            isTempGraphDuplicateInList(tempGraph, newTempGraphsList) ||
+            isTempGraphDuplicateInList(tempGraph, dotGraphsTemp)
+          ) {
+            continue;
+          }
+
           newMergedList.push(newMerged[o]);
           newWhereList.push(newWhere[o]);
-          newGraphsList.push(tempGraph);
+          newTempGraphsList.push(tempGraph);
         }
+
+        // regular checks if memory usage is too much
+        if (process.memoryUsage().heapTotal / 1024 / 1024 + 1024 > max_old_space_size) {
+          dotGraphsTemp.push(...newTempGraphsList);
+          dotOrigins.push(...newMergedList);
+          dotWhere.push(...newWhereList);
+          keepLargestTreesCleanUp(dotGraphsTemp, dotWhere, dotOrigins);
+          break doloop;
+        }
+
+        // the below cleanup is probably not needed as it is also done inside createMergeOrigin. But in case a bigger merged tree is found much later then it will be used. But I can usually find the maximum maxNumEdges from the first two origins merge
+        keepLargestTreesCleanUp(newTempGraphsList, newWhereList, newMergedList);
+        deleteTreesBasedOnNumberedLabels(newTempGraphsList, newWhereList, newMergedList);
 
         // ----------------
       }
     }
 
-    dotGraphsTemp.push(...newGraphsList);
+    dotGraphsTemp.push(...newTempGraphsList);
     dotOrigins.push(...newMergedList);
     dotWhere.push(...newWhereList);
     keepLargestTreesCleanUp(dotGraphsTemp, dotWhere, dotOrigins);
 
-    //
-  } while (newMergedList.length !== 0);
+    // keep repeating merging as long as there are new merges (newMergedList.length !== 0) and the memory usage is less than 1gb than the max-old-space-size that I have chosen
+  } while (
+    newMergedList.length !== 0 &&
+    process.memoryUsage().heapTotal / 1024 / 1024 + 1024 < max_old_space_size
+  );
 
-  // unite merged and first
-  // dotGraphsTemp.push(...newGraphsList);
-  // dotOrigins.push(...newMergedList);
-  // dotWhere.push(...newWhereList);
+  //
+
   dotSupport = dotWhere.map((w) => {
     return w.length;
   });
-  const dotGraphs = createDotGraphsFromDotGraphsTemp(dotGraphsTemp);
+  ({ dotGraphsTemp, dotSupport, dotWhere, dotOrigins } = sortTreesBasedOnSupportEdgeLabelsOrigins(
+    dotGraphsTemp,
+    dotSupport,
+    dotWhere,
+    dotOrigins
+  ));
+
+  // ----keep only a specific amount of frequent trees----
+  dotGraphsTemp.splice(numOfDigraphsToKeep);
+  dotWhere.splice(numOfDigraphsToKeep);
+  dotOrigins.splice(numOfDigraphsToKeep);
+  // ----
+
+  // unite merged and first
+  // dotGraphsTemp.push(...newTempGraphsList);
+  // dotOrigins.push(...newMergedList);
+  // dotWhere.push(...newWhereList);
+
+  const dotGraphs = createDotGraphsFromDotGraphsTemp(dotGraphsTemp, clusteredBow);
 
   // adds the stylizing info for the frquent dotGraphs  trees in order to be shown on the html
   addStylesForDotGraphsInDoms(dotOrigins, dotWhere, domFromAllSubdirs, dotGraphs);
