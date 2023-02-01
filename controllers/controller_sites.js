@@ -1,5 +1,6 @@
 const DB_Model_Sites = require("../db/Model_Site");
 const DB_Model_Users = require("../db/Model_Users");
+const DB_Model_Analysis = require("../db/Model_TermAnalysis");
 const { fork } = require("child_process");
 const axios = require("axios");
 
@@ -17,8 +18,19 @@ const getAllSites = async (req, res) => {
 
 const getMenu = async (req, res) => {
   try {
-    const sites = await DB_Model_Sites.find({}, "_id url creationDate");
+    const sitesDB = await DB_Model_Sites.find({}, "_id url creationDate");
     const userDB = await DB_Model_Users.findById(req.middlewareUserId);
+    const analysis = await DB_Model_Analysis.find({}, "status parameters datasetSiteId");
+    const sites = sitesDB.map((site) => {
+      const anal = analysis.find((x) => x.datasetSiteId === site._id.toString());
+      return {
+        _id: site._id,
+        url: site.url,
+        creationDate: site.creationDate,
+        status: anal?.status,
+        parameters: anal?.parameters,
+      };
+    });
     res.status(200).json({ sites, username: userDB.githubUsername });
   } catch (error) {
     res.status(500).json({ msg: error.message });
@@ -97,7 +109,8 @@ const deleteSite = async (req, res) => {
     if (!site) {
       return res.status(404).json({ msg: `No site with id: ${sanitizedId}` });
     }
-    res.status(200).json({ site });
+    const analysis = await DB_Model_Analysis.findOneAndDelete({ datasetSiteId: sanitizedId });
+    res.status(200).json({ msg: "Site Deleted" });
   } catch (error) {
     res.status(500).json({ msg: error.message });
   }

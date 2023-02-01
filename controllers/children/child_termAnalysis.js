@@ -139,9 +139,17 @@ const childTermAnalysis = async (
     const newAnalysis = await DB_Model_Analysis.findOneAndUpdate(
       { datasetSiteId: sanitizedId },
       {
-        status: `Completed at ${new Date()}. With minimum support=${Math.min(
+        status: `Completed at ${new Date()}. With minimum subdir support=${Math.min(
           ...gspanOut.support
-        )}. Also subdirnum=${sanitizedUpperSubdirNum}; sanitizedPythonUpperNodeLimit=${sanitizedPythonUpperNodeLimit} and sanitizedPythonLowerNodeLimit=${sanitizedPythonLowerNodeLimit}`,
+        )}. Also UpperSubdirNum=${sanitizedUpperSubdirNum}; PythonUpperNodeLimit=${sanitizedPythonUpperNodeLimit}, PythonLowerNodeLimit=${sanitizedPythonLowerNodeLimit} and PythonSupport=${sanitizedPythonSupport}`,
+        parameters: {
+          // sanitizedUpperNodeLimit,
+          sanitizedUpperSubdirNum,
+          sanitizedPythonSupport,
+          // sanitizedLowerNodeLimit,
+          sanitizedPythonUpperNodeLimit,
+          sanitizedPythonLowerNodeLimit,
+        },
         analysis: {
           dotgraphTrees,
           // gspanOut: { graphs: gspanOut.graphs, support: gspanOut.support, where: gspanOut.where }, // removed gspanOut.origins
@@ -1254,6 +1262,9 @@ const getKmeansNodexNode = (nodesDirArr) => {
     }
   }
   console.log("third");
+  if (nodexnode.length === 0) {
+    throw new Error("No word found. Check if site is rendered properly");
+  }
   // ----
   let max = -2;
   let noOfClusters = -2; // number of clusters with max silhouette

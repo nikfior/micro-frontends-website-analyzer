@@ -54,7 +54,7 @@ const getTermAnalysis = async (req, res) => {
 
     const newdAnalysis = await DB_Model_Analysis.findOneAndUpdate(
       { datasetSiteId: sanitizedId },
-      { status: "Analyzing......... since " + new Date(), analysis: null },
+      { status: "Analyzing......... since " + new Date(), analysis: null, parameters: null },
       { new: true, upsert: true }
     );
 
