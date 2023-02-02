@@ -2,26 +2,48 @@ const axios = require("axios");
 const { parse } = require("node-html-parser");
 const connectDB = require("../../db/connectDB");
 const DB_Model_Sites = require("../../db/Model_Site");
+const puppeteer = require("puppeteer");
 
 // ----
 
 process.on("message", (message) => {
-  childCreateSite(message.url);
+  childCreateSite(message.url, message.useHeadlessBrowser);
 });
 
 // ----
 
-const childCreateSite = async (url) => {
+const childCreateSite = async (url, useHeadlessBrowser) => {
   try {
     await connectDB(process.env.MONGO_DB_URI);
 
-    // fetch and parse
-    const html = await axios.get(url);
-    // console.log(html.status);
-    // console.log(html.data);
+    let html = {};
+    let browser, page;
+    if (!useHeadlessBrowser) {
+      html = await axios.get(url);
+      // console.log(html.status);
+      // console.log(html.data);
+    } else {
+      browser = await puppeteer.launch();
+      page = (await browser.pages())[0] || (await browser.newPage());
+      await page.goto(url, { waitUntil: "networkidle0" });
+      await page.setViewport({ width: 1080, height: 1024 });
+      html.data = await page.content();
+      html.url = page.url();
+      // await page.goto("https://demo.microfrontends.com/", { waitUntil: "networkidle0" });
+    }
 
     // html.request.res.responseUrl is the actual url after the redirects
-    let [subdirsName, subDirs] = await crawler(html.data, html.request.res.responseUrl);
+    let [subdirsName, subDirs] = await crawler(
+      html.data,
+      html.request?.res.responseUrl || html.url,
+      useHeadlessBrowser,
+      browser,
+      page
+    );
+
+    if (useHeadlessBrowser) {
+      await browser.close();
+    }
 
     // remove subdirectories with different languages if I have more than 5 subdirectories
     if (subDirs.length > 5) {
@@ -64,7 +86,7 @@ const childCreateSite = async (url) => {
 
 // ------
 
-const crawler = async (htmlData, url) => {
+const crawler = async (htmlData, url, useHeadlessBrowser, browser, page) => {
   const dom = parse(htmlData);
   if (!dom.getElementsByTagName("body")) {
     throw new Error("Possible malformed HTML. Cannot parse HTML code correctly.");
@@ -86,10 +108,17 @@ const crawler = async (htmlData, url) => {
       // makes the relative paths, absolute
       const subdirname = new URL(node.getAttribute("href"), url).href;
 
-      let html = await axios.get(subdirname);
-
+      let html = {};
+      if (!useHeadlessBrowser) {
+        html = await axios.get(subdirname);
+      } else {
+        await page.goto(subdirname, { waitUntil: "networkidle0" });
+        // await page.setViewport({ width: 1080, height: 1024 });
+        html.data = await page.content();
+        html.url = page.url();
+      }
       // if it already exists then skip it
-      if (subdirsName.includes(html.request.res.responseUrl)) {
+      if (subdirsName.includes(html.request?.res.responseUrl || html.url)) {
         continue;
       }
 
@@ -100,7 +129,7 @@ const crawler = async (htmlData, url) => {
       }
 
       subdirHTMLArr.push(html.data);
-      subdirsName.push(html.request.res.responseUrl);
+      subdirsName.push(html.request?.res.responseUrl || html.url);
 
       //
     } catch (error) {

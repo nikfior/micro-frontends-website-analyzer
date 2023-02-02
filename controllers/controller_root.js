@@ -11,6 +11,43 @@ const logoutUser = (req, res) => {
 // const model = require("wink-eng-lite-model");
 // const { parse } = require("node-html-parser");
 const home = async (req, res) => {
+  // const puppeteer = require("puppeteer");
+  // const browser = await puppeteer.launch({ headless: false });
+  // // const page = await browser.newPage();
+  // // const page = (await browser.pages())[0];
+  // const page = (await browser.pages())[0] || (await browser.newPage());
+  // await page.goto("http://demo.microfrontends.com/", { waitUntil: "networkidle0" });
+  // await page.setViewport({ width: 1080, height: 1024 });
+  // // console.log(await page.content());
+  // console.log(page.url());
+  // // const element = await page.waitForSelector("h2.sc-gZMcBi");
+  // // console.log(await element.evaluate((x) => x.textContent));
+  // // page.evaluate((_) => {
+  // //   window.scrollBy(0, window.innerHeight);
+  // // });
+  // // const element = (await page.$$("a"))[1];
+  // // let options = { button: "middle" };
+  // // // const te = await page.click("a[href='/random']", options);
+
+  // // await element.click(options);
+  // // await element.click(options);
+  // // const [target] = await Promise.all([
+  // //   new Promise((resolve) => browser.once("targetcreated", resolve)),
+  // //   element.click(options),
+  // // ]);
+
+  // // const newsPage = await target.page();
+  // // // await page.keyboard.down("Control");
+  // // // await element.click();
+  // // // await page.keyboard.up("Control");
+  // // // await element.click(options);
+  // // console.log(await element.evaluate((x) => x.textContent));
+  // // const tabs = await browser.pages();
+  // // console.log(await tabs[2].content());
+
+  // // console.log(await page.target());
+  // await browser.close();
+
   // const visit = (x) => {
   //   console.log(x.tag);
   //   return x;

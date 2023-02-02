@@ -44,6 +44,7 @@ const createSite = async (req, res) => {
     }
 
     let sanitizedUrl = req.body.url.toString();
+    const sanitizedSlowCrawl = req.body.slowCrawl?.toString().toLowerCase() === "true";
     if (!sanitizedUrl.startsWith("http://") && !sanitizedUrl.startsWith("https://")) {
       sanitizedUrl = "http://" + sanitizedUrl;
     }
@@ -52,7 +53,7 @@ const createSite = async (req, res) => {
     const html = await axios.get(sanitizedUrl);
 
     const childProcess = fork("./controllers/children/child_createSite");
-    childProcess.send({ url: sanitizedUrl });
+    childProcess.send({ url: sanitizedUrl, useHeadlessBrowser: sanitizedSlowCrawl });
 
     return res
       .status(201)
