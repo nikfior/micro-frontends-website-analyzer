@@ -31,7 +31,8 @@ process.on("message", (message) => {
     message.sanitizedPythonSupport,
     message.sanitizedLowerNodeLimit,
     message.sanitizedPythonUpperNodeLimit,
-    message.sanitizedPythonLowerNodeLimit
+    message.sanitizedPythonLowerNodeLimit,
+    message.sanitizedAggressiveTrimming
   );
 });
 
@@ -44,18 +45,25 @@ const childTermAnalysis = async (
   sanitizedPythonSupport,
   sanitizedLowerNodeLimit,
   sanitizedPythonUpperNodeLimit,
-  sanitizedPythonLowerNodeLimit
+  sanitizedPythonLowerNodeLimit,
+  useAggressiveTrimming
 ) => {
   try {
     await connectDB(process.env.MONGO_DB_URI);
 
     const site = await DB_Model_Sites.findById(sanitizedId);
 
+    sanitizedUpperSubdirNum = sanitizedUpperSubdirNum || "15";
+    sanitizedPythonUpperNodeLimit = sanitizedPythonUpperNodeLimit || "5";
+    sanitizedPythonLowerNodeLimit = sanitizedPythonLowerNodeLimit || "3";
+    sanitizedLowerNodeLimit ??= sanitizedPythonLowerNodeLimit;
+    // sanitizedUpperNodeLimit = sanitizedUpperNodeLimit || "5";
+
     // in case there are less subdirs than the upper limit
     sanitizedUpperSubdirNum =
       sanitizedUpperSubdirNum > site.subdirsname.length ? site.subdirsname.length : sanitizedUpperSubdirNum;
 
-    sanitizedPythonSupport = sanitizedPythonSupport ? sanitizedPythonSupport : sanitizedUpperSubdirNum;
+    sanitizedPythonSupport = sanitizedPythonSupport || sanitizedUpperSubdirNum;
 
     let nodesDirArr = []; // each index is a site directory
     // each subdirectory of the site is passed in extractTerms to get back the terms. I am also passing the index of the subdirectory so that I can use it as part of the Id of each node
@@ -133,7 +141,15 @@ const childTermAnalysis = async (
 
     console.log("Before gspanOutToDotGraph");
     const dotgraphTrees = gspanOut.graphs
-      ? gspanOutToDotGraph(gspanOut, domFromAllSubdirs, clusteredBow, maxAllres)
+      ? gspanOutToDotGraph(
+          gspanOut,
+          domFromAllSubdirs,
+          clusteredBow,
+          maxAllres,
+          // sanitizedUpperNodeLimit,
+          sanitizedLowerNodeLimit,
+          useAggressiveTrimming
+        )
       : null;
 
     const newAnalysis = await DB_Model_Analysis.findOneAndUpdate(
@@ -146,7 +162,7 @@ const childTermAnalysis = async (
           // sanitizedUpperNodeLimit,
           sanitizedUpperSubdirNum,
           sanitizedPythonSupport,
-          // sanitizedLowerNodeLimit,
+          sanitizedLowerNodeLimit,
           sanitizedPythonUpperNodeLimit,
           sanitizedPythonLowerNodeLimit,
         },
@@ -191,12 +207,20 @@ const childTermAnalysis = async (
   }
 };
 
-// ----
+// ----------------------------------------------------
 
-const gspanOutToDotGraph = (gspanOut, domFromAllSubdirs, clusteredBow, maxAllres) => {
+const gspanOutToDotGraph = (
+  gspanOut,
+  domFromAllSubdirs,
+  clusteredBow,
+  maxAllres,
+  // sanitizedUpperNodeLimit,
+  sanitizedLowerNodeLimit,
+  useAggressiveTrimming
+) => {
   const minSupport = Math.min(...gspanOut.support);
 
-  const numOfDigraphsToKeep = 20;
+  const numOfDigraphsToKeep = 30;
 
   // let dotGraphsTemp = [];
   // let dotSupport = [];
@@ -435,7 +459,7 @@ const gspanOutToDotGraph = (gspanOut, domFromAllSubdirs, clusteredBow, maxAllres
                     tempEdges,
                     Object.values(originsListToCheckAgainstNewIndexForDuplicate)
                   )) ||
-                tempEdges.length < maxNumEdges
+                (useAggressiveTrimming && tempEdges.length < maxNumEdges)
               ) {
                 indicesToOmit.push(index);
                 continue;
@@ -473,7 +497,7 @@ const gspanOutToDotGraph = (gspanOut, domFromAllSubdirs, clusteredBow, maxAllres
       if (
         Object.keys(o).length < minSupport ||
         isItDuplicateInList(o[0][0], newMerged) ||
-        o[0][0].length < maxNumEdges
+        (useAggressiveTrimming && o[0][0].length < maxNumEdges)
       ) {
         continue;
       }
@@ -819,16 +843,20 @@ const gspanOutToDotGraph = (gspanOut, domFromAllSubdirs, clusteredBow, maxAllres
 
   // -------------------
 
+  // delete smaller frequent trees in order to reduce memory usage during merging. Keeps the trees with the higher edges/vertices available
   const keepLargestTreesCleanUp = (dotGraphsTemp, dotWhere, dotOrigins) => {
     // if the number of trees is small (less than 10), then do nothing
     if (dotOrigins.length < 10) {
       return;
     }
 
-    // delete smaller frequent trees in order to reduce memory usage during merging. Keeps trees with the highest edges/vertices available
-    const largestLength = Math.max(...dotGraphsTemp.map((x) => x.length));
+    // if useAggressiveTrimming is true then it keeps only the trees with the largest number of nodes, otherwise it follows the sanitizedLowerNodeLimit input
+    // the reason I multiply sanitizedLowerNodeLimit with 2 is because I measure the length of tree for convenience and speed during comparing. And the length of the tree is twice the number of nodes. (number of nodes)=(number of edges)-1+(title line)
+    const largestLength = useAggressiveTrimming
+      ? Math.max(...dotGraphsTemp.map((x) => x.length))
+      : sanitizedLowerNodeLimit * 2;
     for (let i = 0; i < dotGraphsTemp.length; i++) {
-      if (largestLength > dotGraphsTemp[i].length) {
+      if (dotGraphsTemp[i].length < largestLength) {
         dotGraphsTemp.splice(i, 1);
         dotWhere.splice(i, 1);
         // dotSupport.splice(i,1);
@@ -848,9 +876,14 @@ const gspanOutToDotGraph = (gspanOut, domFromAllSubdirs, clusteredBow, maxAllres
     gspanOut.origins
   );
 
-  keepLargestTreesCleanUp(dotGraphsTemp, dotWhere, dotOrigins);
-  deleteTreesBasedOnNumberedLabels(dotGraphsTemp, dotWhere, dotOrigins);
+  if (useAggressiveTrimming) {
+    keepLargestTreesCleanUp(dotGraphsTemp, dotWhere, dotOrigins);
+    deleteTreesBasedOnNumberedLabels(dotGraphsTemp, dotWhere, dotOrigins);
+  }
+
+  // the max number of edges that the current biggest tree holds. It gets updated during the merging process
   let maxNumEdges = dotOrigins[0][0][0].length;
+
   let newMergedList;
   let newWhereList;
   let newTempGraphsList;
@@ -917,13 +950,15 @@ const gspanOutToDotGraph = (gspanOut, domFromAllSubdirs, clusteredBow, maxAllres
           dotGraphsTemp.push(...newTempGraphsList);
           dotOrigins.push(...newMergedList);
           dotWhere.push(...newWhereList);
-          keepLargestTreesCleanUp(dotGraphsTemp, dotWhere, dotOrigins);
+          // keepLargestTreesCleanUp(dotGraphsTemp, dotWhere, dotOrigins);
           break doloop;
         }
 
-        // the below cleanup is probably not needed as it is also done inside createMergeOrigin. But in case a bigger merged tree is found much later then it will be used. But I can usually find the maximum maxNumEdges from the first two origins merge
-        keepLargestTreesCleanUp(newTempGraphsList, newWhereList, newMergedList);
-        deleteTreesBasedOnNumberedLabels(newTempGraphsList, newWhereList, newMergedList);
+        // the below cleanup is probably not needed for the aggressive trimming as it is also done inside createMergeOrigin. But in case a bigger merged tree is found much later then it will be used. But I can usually find the maximum maxNumEdges from the first two origins merge
+        if (useAggressiveTrimming) {
+          keepLargestTreesCleanUp(newTempGraphsList, newWhereList, newMergedList);
+          deleteTreesBasedOnNumberedLabels(newTempGraphsList, newWhereList, newMergedList);
+        }
 
         // ----------------
       }
@@ -932,13 +967,19 @@ const gspanOutToDotGraph = (gspanOut, domFromAllSubdirs, clusteredBow, maxAllres
     dotGraphsTemp.push(...newTempGraphsList);
     dotOrigins.push(...newMergedList);
     dotWhere.push(...newWhereList);
-    keepLargestTreesCleanUp(dotGraphsTemp, dotWhere, dotOrigins);
+    if (useAggressiveTrimming) {
+      deleteTreesBasedOnNumberedLabels(dotGraphsTemp, dotWhere, dotOrigins);
+      keepLargestTreesCleanUp(dotGraphsTemp, dotWhere, dotOrigins);
+    }
 
     // keep repeating merging as long as there are new merges (newMergedList.length !== 0) and the memory usage is less than 1gb than the max-old-space-size that I have chosen
   } while (
     newMergedList.length !== 0 &&
     process.memoryUsage().heapTotal / 1024 / 1024 + 1024 < max_old_space_size
   );
+
+  deleteTreesBasedOnNumberedLabels(dotGraphsTemp, dotWhere, dotOrigins);
+  keepLargestTreesCleanUp(dotGraphsTemp, dotWhere, dotOrigins);
 
   //
 
@@ -956,6 +997,7 @@ const gspanOutToDotGraph = (gspanOut, domFromAllSubdirs, clusteredBow, maxAllres
   dotGraphsTemp.splice(numOfDigraphsToKeep);
   dotWhere.splice(numOfDigraphsToKeep);
   dotOrigins.splice(numOfDigraphsToKeep);
+  dotSupport.splice(numOfDigraphsToKeep);
   // ----
 
   // unite merged and first
@@ -965,7 +1007,7 @@ const gspanOutToDotGraph = (gspanOut, domFromAllSubdirs, clusteredBow, maxAllres
 
   const dotGraphs = createDotGraphsFromDotGraphsTemp(dotGraphsTemp, clusteredBow);
 
-  // adds the stylizing info for the frquent dotGraphs  trees in order to be shown on the html
+  // adds the stylizing info for the frequent dotGraphs trees in order to be shown on the html
   addStylesForDotGraphsInDoms(dotOrigins, dotWhere, domFromAllSubdirs, dotGraphs);
 
   // not returning dotOrigins due to its size

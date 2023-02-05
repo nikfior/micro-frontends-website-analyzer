@@ -4,24 +4,23 @@ const { fork } = require("child_process");
 
 const getTermAnalysis = async (req, res) => {
   try {
+    // check and verify correct inputs
+
     // const sanitizedId = req.query.id?.toString().replace(/\$/g, "");
-    const sanitizedId = req.query.id?.toString().match(/^[0-9a-f]*$/i)[0];
-    let sanitizedUpperNodeLimit = req.query.uppernodelimit?.toString().match(/^[0-9]*$/)[0];
-    let sanitizedUpperSubdirNum = req.query.uppersubdirnum?.toString().match(/^[0-9]*$/)[0];
-    let sanitizedPythonSupport = req.query.pythonsupport?.toString().match(/^[0-9]*$/)[0];
-    let sanitizedLowerNodeLimit = req.query.lowernodelimit?.toString().match(/^[0-9]*$/)[0];
-    let sanitizedPythonUpperNodeLimit = req.query.pythonuppernodelimit?.toString().match(/^[0-9]*$/)[0];
-    let sanitizedPythonLowerNodeLimit = req.query.pythonlowernodelimit?.toString().match(/^[0-9]*$/)[0];
+    const sanitizedId = req.query.id?.toString().match(/^[0-9a-f]*$/i)?.[0];
+    if (!sanitizedId) {
+      throw new Error("Wrong id format");
+    }
+    let sanitizedUpperNodeLimit = req.query.uppernodelimit?.toString().match(/^[0-9]*$/)?.[0];
+    let sanitizedUpperSubdirNum = req.query.uppersubdirnum?.toString().match(/^[0-9]*$/)?.[0];
+    let sanitizedPythonSupport = req.query.pythonsupport?.toString().match(/^[0-9]*$/)?.[0];
+    let sanitizedLowerNodeLimit = req.query.lowernodelimit?.toString().match(/^[0-9]*$/)?.[0];
+    let sanitizedPythonUpperNodeLimit = req.query.pythonuppernodelimit?.toString().match(/^[0-9]*$/)?.[0];
+    let sanitizedPythonLowerNodeLimit = req.query.pythonlowernodelimit?.toString().match(/^[0-9]*$/)?.[0];
+    const sanitizedAggressiveTrimming = req.query.aggressiveTrimming?.toString().toLowerCase() === "true";
 
-    // sanitizedUpperNodeLimit = sanitizedUpperNodeLimit ? sanitizedUpperNodeLimit : "5";
-    sanitizedUpperSubdirNum = sanitizedUpperSubdirNum ? sanitizedUpperSubdirNum : "15";
-
-    // // the sanitizedSupport default happens in the fork where I know the max upper subdir number
-    // sanitizedSupport = sanitizedSupport ? sanitizedSupport : sanitizedUpperSubdirNum;
-    // sanitizedLowerNodeLimit = sanitizedLowerNodeLimit ? sanitizedLowerNodeLimit : "3";
-
-    sanitizedPythonUpperNodeLimit = sanitizedPythonUpperNodeLimit ? sanitizedPythonUpperNodeLimit : "5";
-    sanitizedPythonLowerNodeLimit = sanitizedPythonLowerNodeLimit ? sanitizedPythonLowerNodeLimit : "3";
+    //
+    //
 
     // ---------------------------------------------TODO use Set to remove duplicates; check for title, not only text
     // save the analysis in the db and here at the beginning check if it exists in the db first and if it doesn't then execute it and save it in the db then
@@ -67,6 +66,7 @@ const getTermAnalysis = async (req, res) => {
       sanitizedLowerNodeLimit,
       sanitizedPythonUpperNodeLimit,
       sanitizedPythonLowerNodeLimit,
+      sanitizedAggressiveTrimming,
     });
 
     return res.json(newdAnalysis);
