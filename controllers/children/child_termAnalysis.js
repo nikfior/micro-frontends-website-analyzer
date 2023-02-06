@@ -54,8 +54,14 @@ const childTermAnalysis = async (
     const site = await DB_Model_Sites.findById(sanitizedId);
 
     sanitizedUpperSubdirNum = sanitizedUpperSubdirNum || "15";
-    sanitizedPythonUpperNodeLimit = sanitizedPythonUpperNodeLimit || "5";
     sanitizedPythonLowerNodeLimit = sanitizedPythonLowerNodeLimit || "3";
+    sanitizedPythonUpperNodeLimit = sanitizedPythonUpperNodeLimit || "5";
+    // if upper limit is lower than lower limit then set upper limit = lower limit
+    sanitizedPythonUpperNodeLimit =
+      sanitizedPythonUpperNodeLimit < sanitizedPythonLowerNodeLimit
+        ? sanitizedPythonLowerNodeLimit
+        : sanitizedPythonUpperNodeLimit;
+
     sanitizedLowerNodeLimit ??= sanitizedPythonLowerNodeLimit;
     // sanitizedUpperNodeLimit = sanitizedUpperNodeLimit || "5";
 
@@ -538,8 +544,7 @@ const gspanOutToDotGraph = (
     const graph = ["t # -1"];
     const vertexToCheck = {};
 
-    // sort mutates the original. If I don't want to mutate it then use origin.slice().sort((...
-    const origin2 = origin.sort((a, b) => {
+    const origin2 = origin.slice().sort((a, b) => {
       return a[0] - b[0];
     });
 
@@ -607,9 +612,12 @@ const gspanOutToDotGraph = (
     return dotGraphs;
   };
 
+  // TODOTODO make a isItDuplicateInList that searches an origin against all the origins of a subdir instead of only the first one. check their commonWhere and do that in the subdirectory with the least amount of origins
+
   // -----------------
-  // checks if an origin already exists in a list of origins. The list must be in the form of dotOrigins
+  // checks if an origin already exists in a list of origins. The list must be in the form of dotOrigins. Warning: it does a shallow check. It checks only the first origin
   const isItDuplicateInList = (newMerged0, newMergedList) => {
+    // TODO it would be better to find the common subdir first and compare the first origin there
     let j, i, k;
     for (j = 0; j < newMergedList.length; j++) {
       if (newMerged0.length !== newMergedList[j][0][0].length) {
@@ -655,10 +663,10 @@ const gspanOutToDotGraph = (
       }
 
       //
-      for (let j = 0; j < tempGraph.length; j++) {
+      for (j = 1; j < tempGraph.length; j++) {
         //
 
-        for (k = 0; k < tempGraph.length; k++) {
+        for (k = 1; k < tempGraph.length; k++) {
           if (tempGraph[j] === newTempGraphsList[i][k]) {
             break;
           }
@@ -964,9 +972,13 @@ const gspanOutToDotGraph = (
       }
     }
 
+    // remove trees below the sanitizedLowerNodeLimit from the original trees that created the current merges
+    keepLargestTreesCleanUp(dotGraphsTemp, dotWhere, dotOrigins);
+
     dotGraphsTemp.push(...newTempGraphsList);
     dotOrigins.push(...newMergedList);
     dotWhere.push(...newWhereList);
+    // the below cleanup is probably unnecessary
     if (useAggressiveTrimming) {
       deleteTreesBasedOnNumberedLabels(dotGraphsTemp, dotWhere, dotOrigins);
       keepLargestTreesCleanUp(dotGraphsTemp, dotWhere, dotOrigins);
