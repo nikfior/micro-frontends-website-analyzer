@@ -2,7 +2,7 @@ const DB_Model_Sites = require("../../db/Model_Site");
 const DB_Model_Analysis = require("../../db/Model_TermAnalysis");
 const connectDB = require("../../db/connectDB");
 const { parse } = require("node-html-parser");
-const model = require("wink-eng-lite-model");
+const model = require("wink-eng-lite-web-model");
 const nlp = require("wink-nlp")(model);
 const its = require("wink-nlp/src/its.js");
 const as = require("wink-nlp/src/as.js");
@@ -32,7 +32,9 @@ process.on("message", (message) => {
     message.sanitizedLowerNodeLimit,
     message.sanitizedPythonUpperNodeLimit,
     message.sanitizedPythonLowerNodeLimit,
-    message.sanitizedAggressiveTrimming
+    message.sanitizedAggressiveTrimming,
+    message.sanitizedUseEmbeddedFrequentTreeMining,
+    message.sanitizedNoOfMicrofrontends
   );
 });
 
@@ -46,7 +48,9 @@ const childTermAnalysis = async (
   sanitizedLowerNodeLimit,
   sanitizedPythonUpperNodeLimit,
   sanitizedPythonLowerNodeLimit,
-  useAggressiveTrimming
+  useAggressiveTrimming,
+  sanitizedUseEmbeddedFrequentTreeMining,
+  sanitizedNoOfMicrofrontends
 ) => {
   try {
     await connectDB(process.env.MONGO_DB_URI);
@@ -63,7 +67,7 @@ const childTermAnalysis = async (
         : sanitizedPythonUpperNodeLimit;
 
     sanitizedLowerNodeLimit ??= sanitizedPythonLowerNodeLimit;
-    // sanitizedUpperNodeLimit = sanitizedUpperNodeLimit || "5";
+    // sanitizedUpperNodeLimit ??= sanitizedPythonUpperNodeLimit;
 
     // in case there are less subdirs than the upper limit
     sanitizedUpperSubdirNum =
@@ -126,7 +130,7 @@ const childTermAnalysis = async (
     // [node(terms) x node(terms)] -> clusters
     // cos similarity between all nodes using their terms bows
     console.log("Before getKmeansNodexNode");
-    const { maxAllres, clusteredBow } = getKmeansNodexNode(nodesDirArr);
+    const { maxAllres, clusteredBow } = getKmeansNodexNode(nodesDirArr, sanitizedNoOfMicrofrontends);
     //
     console.log("Before convertToGspanFormatAndModifyDom");
     const gspanIn = convertToGspanFormatAndModifyDom(domFromAllSubdirs, sanitizedId, maxAllres, site.url);
@@ -154,9 +158,13 @@ const childTermAnalysis = async (
           maxAllres,
           // sanitizedUpperNodeLimit,
           sanitizedLowerNodeLimit,
-          useAggressiveTrimming
+          useAggressiveTrimming,
+          sanitizedUseEmbeddedFrequentTreeMining
         )
       : null;
+
+    // make terms of nodesDirArr from array to bow
+    convertNodesDirArrTermsToBow(nodesDirArr);
 
     const newAnalysis = await DB_Model_Analysis.findOneAndUpdate(
       { datasetSiteId: sanitizedId },
@@ -222,7 +230,8 @@ const gspanOutToDotGraph = (
   maxAllres,
   // sanitizedUpperNodeLimit,
   sanitizedLowerNodeLimit,
-  useAggressiveTrimming
+  useAggressiveTrimming,
+  sanitizedUseEmbeddedFrequentTreeMining
 ) => {
   const minSupport = Math.min(...gspanOut.support);
 
@@ -738,21 +747,26 @@ const gspanOutToDotGraph = (
         for (const origin of dotOrigins[i][j]) {
           for (const line of origin) {
             const olddomone = dom.querySelector(`[vertexCounter=${line[0]}]`);
-            const oldone = olddomone.getAttribute("digraphLabelStylize");
-            if ((oldone && !oldone.includes(`;${digraphIndex};`)) || !oldone) {
-              olddomone.setAttribute(
-                "digraphLabelStylize",
-                oldone ? oldone + `${digraphIndex};` : `;${digraphIndex};`
-              );
+            // I don't want to make a border around body because it makes it messy and doesn't really help
+            if (olddomone.tagName !== "BODY") {
+              const oldone = olddomone.getAttribute("digraphLabelStylize");
+              if ((oldone && !oldone.includes(`;${digraphIndex};`)) || !oldone) {
+                olddomone.setAttribute(
+                  "digraphLabelStylize",
+                  oldone ? oldone + `${digraphIndex};` : `;${digraphIndex};`
+                );
+              }
             }
 
             const olddomtwo = dom.querySelector(`[vertexCounter=${line[1]}]`);
-            const oldtwo = olddomtwo.getAttribute("digraphLabelStylize");
-            if ((oldtwo && !oldtwo.includes(`;${digraphIndex};`)) || !oldtwo) {
-              olddomtwo.setAttribute(
-                "digraphLabelStylize",
-                oldtwo ? oldtwo + `${digraphIndex};` : `;${digraphIndex};`
-              );
+            if (olddomtwo.tagName !== "BODY") {
+              const oldtwo = olddomtwo.getAttribute("digraphLabelStylize");
+              if ((oldtwo && !oldtwo.includes(`;${digraphIndex};`)) || !oldtwo) {
+                olddomtwo.setAttribute(
+                  "digraphLabelStylize",
+                  oldtwo ? oldtwo + `${digraphIndex};` : `;${digraphIndex};`
+                );
+              }
             }
             //
           }
@@ -897,6 +911,12 @@ const gspanOutToDotGraph = (
   let newTempGraphsList;
 
   doloop: do {
+    //
+    // TODO in the future also add to break if sanitizedUpperNodeLimit<=sanitizedPythonUpperNodeLimit because that means that I don't need to merge further. All merging that I want was achieved in gspan
+    if (!sanitizedUseEmbeddedFrequentTreeMining) {
+      break doloop;
+    }
+
     newMergedList = [];
     newWhereList = [];
     newTempGraphsList = [];
@@ -1286,7 +1306,7 @@ const trimTree = (tree) => {
 //
 
 // cos similarity between all nodes using their terms bows
-const getKmeansNodexNode = (nodesDirArr) => {
+const getKmeansNodexNode = (nodesDirArr, sanitizedNoOfMicrofrontends) => {
   //
   console.log("first");
   const allNodesFromAllSubds = nodesDirArr.flat(10); // allNodesFromAllSubds: all nodes from all subds in one array
@@ -1329,12 +1349,13 @@ const getKmeansNodexNode = (nodesDirArr) => {
         ? 20
         : nodexnode[0].length / 3
       : nodexnode[0].length; // TODO find better upper limit
+  upperLimit = sanitizedNoOfMicrofrontends || upperLimit;
 
-  for (let c = 2; c < upperLimit; c++) {
-    for (let i = 0; i < 40; i++) {
+  for (let c = 2; c <= upperLimit; c++) {
+    for (let i = 0; i < 60; i++) {
       console.log("in kmeans at c= " + c + " and repeat at i= " + i);
-      // for the first 10 iterations use the kmpp initialization algorithm and for the rest use normal randomization
-      let res = skmeans(nodexnode, c, i < 10 ? "kmpp" : null, null, costumDistanceFormula);
+      // for the first 15 iterations use the kmpp initialization algorithm and for the rest use normal randomization
+      let res = skmeans(nodexnode, c, i < 15 ? "kmpp" : null, null, costumDistanceFormula);
       // console.log(res);
       let coef = silhouetteCoefficient(nodexnode, res.idxs, costumDistanceFormula);
       // console.log("place", i, "number", coef);
@@ -1412,13 +1433,22 @@ const extractTerms = async (dom, subdIndex, countId) => {
 
   // for (let node of domBody.childNodes) {}
   for (const node of nodeList) {
+    // //
+    // // TODOTODO Check if the below test is better to have or not
+    // // the below check make sures to skip nodes that contain many text nodes. That way I get only the leaves of the dom tree
+    // if (node.childNodes.length !== 1) {
+    //   continue;
+    // }
+
     let nodeTerms = [];
 
-    // tokenize the textContent of each node and remove punctuations and stopwords
+    // tokenize the textContent of each node and remove punctuations and stopwords. Also remove Particle pos that are somehow not removed with stopwords
     const tokens = nlp
       .readDoc(node.text)
       .tokens()
-      .filter((t) => t.out(its.type) !== "punctuation" && !t.out(its.stopWordFlag));
+      .filter(
+        (t) => t.out(its.type) !== "punctuation" && !t.out(its.stopWordFlag) && t.out(its.pos) !== "PART"
+      );
 
     for (let i = 0; i < tokens.length(); i++) {
       let result = await wordpos.lookup(tokens.itemAt(i).out(its.normal));
@@ -1430,17 +1460,27 @@ const extractTerms = async (dom, subdIndex, countId) => {
         synonyms = result.map((item) => item.synonyms); // TODO maybe get the pos synonyms only and not for all adj,verb,noun,etc?
       }
 
+      // if the word is not found then try the stem version
+      if (synonyms.length === 0) {
+        result = await wordpos.lookup(tokens.itemAt(i).out(its.stem));
+        synonyms = result.map((item) => item.synonyms); // TODO maybe get the pos synonyms only and not for all adj,verb,noun,etc?
+      }
+
       // reducing all synonym groups if it's adj, verb, noun, etc
       synonyms = synonyms.flat(10);
-      // by using new Set(synonyms) I remove the duplicate synonyms of a single word of a text of a node. The node might have duplicate Terms if two words have the same synonym but a single word can't have the same word as a synonym
-      // the reason a single word can have duplicate words as a synonym is because a word can be a verb, noun, adjective and might have the same synonym in those forms
-      nodeTerms = [...nodeTerms, ...new Set(synonyms)];
+      // // by using new Set(synonyms) I remove the duplicate synonyms of a single word of a text of a node. The node might have duplicate Terms if two words have the same synonym but a single word can't have the same word as a synonym
+      // // the reason a single word can have duplicate words as a synonym is because a word can be a verb, noun, adjective and might have the same synonym in those forms
+      // nodeTerms = [...nodeTerms, ...new Set(synonyms)];
+      nodeTerms = [...nodeTerms, ...synonyms];
     }
+
+    // TODO is it better to remove the nodes that don't have text instead of the nodes that have text but don't have synonyms like I do below? and maybe use the text as the terms
+    // TODO Should I add the tokenized text in the terms?
+    // also use the text as terms, too
+    nodeTerms = [...nodeTerms, ...tokens.out(its.normal)];
 
     nodeTerms = nodeTerms.flat(10);
 
-    // TODO it is better to remove the nodes that don't have text instead of the nodes that have text but don't have synonyms like I do here. and maybe use the text as the terms
-    // TODO Should I add the tokenized text in the Terms. But make sure to remove the stopwords
     // save only if there are terms
     if (nodeTerms.length !== 0) {
       dirNode.push({
@@ -1535,6 +1575,18 @@ const mergeGraphsBasedOnDotOriginsOld = (dotGraphsTemp, dotOrigins, dotWhere, a,
 
     if (whereExistsFlag === false) {
       dotOrigins[a].push(dotOrigins[b][i]);
+    }
+  }
+};
+
+const convertNodesDirArrTermsToBow = (nodesDirArr) => {
+  for (let s = 0; s < nodesDirArr.length; s++) {
+    for (let node of nodesDirArr[s]) {
+      node.terms = Object.fromEntries(
+        Object.entries(as.bow(node.terms)).sort((a, b) => {
+          return b[1] - a[1];
+        })
+      );
     }
   }
 };

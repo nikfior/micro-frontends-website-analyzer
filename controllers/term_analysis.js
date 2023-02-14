@@ -18,6 +18,9 @@ const getTermAnalysis = async (req, res) => {
     let sanitizedPythonUpperNodeLimit = req.query.pythonuppernodelimit?.toString().match(/^[0-9]*$/)?.[0];
     let sanitizedPythonLowerNodeLimit = req.query.pythonlowernodelimit?.toString().match(/^[0-9]*$/)?.[0];
     const sanitizedAggressiveTrimming = req.query.aggressiveTrimming?.toString().toLowerCase() === "true";
+    const sanitizedUseEmbeddedFrequentTreeMining =
+      req.query.useEmbeddedFrequentTreeMining?.toString().toLowerCase() === "true";
+    const sanitizedNoOfMicrofrontends = req.query.noOfMicrofrontends?.toString().match(/^[0-9]*$/)?.[0];
 
     //
     //
@@ -67,6 +70,8 @@ const getTermAnalysis = async (req, res) => {
       sanitizedPythonUpperNodeLimit,
       sanitizedPythonLowerNodeLimit,
       sanitizedAggressiveTrimming,
+      sanitizedUseEmbeddedFrequentTreeMining,
+      sanitizedNoOfMicrofrontends,
     });
 
     return res.json(newdAnalysis);
