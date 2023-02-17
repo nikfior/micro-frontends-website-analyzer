@@ -179,6 +179,7 @@ const childTermAnalysis = async (
           sanitizedLowerNodeLimit,
           sanitizedPythonUpperNodeLimit,
           sanitizedPythonLowerNodeLimit,
+          sanitizedNoOfMicrofrontends,
         },
         analysis: {
           dotgraphTrees,

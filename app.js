@@ -7,6 +7,26 @@ const route_sites = require("./routes/route_sites");
 const route_root = require("./routes/route_root");
 const notFound = require("./routes/not_found");
 var cookieParser = require("cookie-parser");
+const swaggerJsdoc = require("swagger-jsdoc");
+const swaggerUi = require("swagger-ui-express");
+const { version } = require("./package.json");
+
+// openapi documentation
+const swaggerOptions = {
+  definition: {
+    openapi: "3.0.0",
+    info: {
+      title: "OpenApi documentation",
+      version,
+    },
+  },
+  apis: ["./routes/*"],
+};
+const swaggerDocument = swaggerJsdoc(swaggerOptions);
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+app.get("/api-docs.json", (req, res) => {
+  return res.status(200).json(swaggerDocument);
+});
 
 // middleware
 app.use(express.json());

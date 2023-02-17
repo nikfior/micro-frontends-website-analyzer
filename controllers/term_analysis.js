@@ -17,10 +17,10 @@ const getTermAnalysis = async (req, res) => {
     let sanitizedLowerNodeLimit = req.query.lowernodelimit?.toString().match(/^[0-9]*$/)?.[0];
     let sanitizedPythonUpperNodeLimit = req.query.pythonuppernodelimit?.toString().match(/^[0-9]*$/)?.[0];
     let sanitizedPythonLowerNodeLimit = req.query.pythonlowernodelimit?.toString().match(/^[0-9]*$/)?.[0];
-    const sanitizedAggressiveTrimming = req.query.aggressiveTrimming?.toString().toLowerCase() === "true";
+    const sanitizedAggressiveTrimming = req.query.aggressivetrimming?.toString().toLowerCase() === "true";
     const sanitizedUseEmbeddedFrequentTreeMining =
-      req.query.useEmbeddedFrequentTreeMining?.toString().toLowerCase() === "true";
-    const sanitizedNoOfMicrofrontends = req.query.noOfMicrofrontends?.toString().match(/^[0-9]*$/)?.[0];
+      req.query.useembeddedfrequenttreemining?.toString().toLowerCase() === "true";
+    const sanitizedNoOfMicrofrontends = req.query.noofmicrofrontends?.toString().match(/^[0-9]*$/)?.[0];
 
     //
     //
