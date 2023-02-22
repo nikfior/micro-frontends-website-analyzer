@@ -59,7 +59,7 @@ const childTermAnalysis = async (
 
     sanitizedUpperSubdirNum = sanitizedUpperSubdirNum || "15";
     sanitizedPythonLowerNodeLimit = sanitizedPythonLowerNodeLimit || "3";
-    sanitizedPythonUpperNodeLimit = sanitizedPythonUpperNodeLimit || "5";
+    sanitizedPythonUpperNodeLimit = sanitizedPythonUpperNodeLimit || "9999";
     // if upper limit is lower than lower limit then set upper limit = lower limit
     sanitizedPythonUpperNodeLimit =
       sanitizedPythonUpperNodeLimit < sanitizedPythonLowerNodeLimit
@@ -131,6 +131,8 @@ const childTermAnalysis = async (
     // cos similarity between all nodes using their terms bows
     console.log("Before getKmeansNodexNode");
     const { maxAllres, clusteredBow } = getKmeansNodexNode(nodesDirArr, sanitizedNoOfMicrofrontends);
+    // if there is no sanitizedNoOfMicrofrontends parameter then assign the one that was chosen by the algorithm so that I can export the value later
+    sanitizedNoOfMicrofrontends ??= maxAllres.k;
     //
     console.log("Before convertToGspanFormatAndModifyDom");
     const gspanIn = convertToGspanFormatAndModifyDom(domFromAllSubdirs, sanitizedId, maxAllres, site.url);
@@ -171,7 +173,7 @@ const childTermAnalysis = async (
       {
         status: `Completed at ${new Date()}. With minimum subdir support=${Math.min(
           ...gspanOut.support
-        )}. Also UpperSubdirNum=${sanitizedUpperSubdirNum}; PythonUpperNodeLimit=${sanitizedPythonUpperNodeLimit}, PythonLowerNodeLimit=${sanitizedPythonLowerNodeLimit} and PythonSupport=${sanitizedPythonSupport}`,
+        )}. Also UpperSubdirNum=${sanitizedUpperSubdirNum}, noOfMicrofrontends=${sanitizedNoOfMicrofrontends}; PythonUpperNodeLimit=${sanitizedPythonUpperNodeLimit}, PythonLowerNodeLimit=${sanitizedPythonLowerNodeLimit} and PythonSupport=${sanitizedPythonSupport}`,
         parameters: {
           // sanitizedUpperNodeLimit,
           sanitizedUpperSubdirNum,
@@ -551,7 +553,7 @@ const gspanOutToDotGraph = (
   const createTempGraphFromOrigin = (origin, dom, maxAllresIdxs) => {
     let counter = 0;
     const edgesToAddAtTheEnd = [];
-    const graph = ["t # -1"];
+    const graph = ["t # 99"];
     const vertexToCheck = {};
 
     const origin2 = origin.slice().sort((a, b) => {
@@ -596,6 +598,10 @@ const gspanOutToDotGraph = (
     const dotGraphs = [];
 
     for (let graph of dotGraphsTemp) {
+      //
+      // also change the title of dotGraphsTemp to match the title of its corresponding dotGraph
+      graph[0] = "t # " + title;
+
       const dotg = [`digraph ${title} {`];
 
       for (let i = 1; i < graph.length; i++) {
@@ -676,7 +682,7 @@ const gspanOutToDotGraph = (
       for (j = 1; j < tempGraph.length; j++) {
         //
 
-        for (k = 1; k < tempGraph.length; k++) {
+        for (k = 1; k < newTempGraphsList[i].length; k++) {
           if (tempGraph[j] === newTempGraphsList[i][k]) {
             break;
           }
@@ -716,7 +722,7 @@ const gspanOutToDotGraph = (
     // const dotgraphBackRenderedDoms = [];
     for (let i = 0; i < dotOrigins.length; i++) {
       //
-      // ----color the dotgraph as well to match with the html----
+      // ----color the dotGraph as well to match with the html----
       for (let k = 0; k < dotGraphs[i].length; k++) {
         const match = dotGraphs[i][k].match(/\d+ \[label="(\d+)/);
         if (match) {
@@ -725,7 +731,7 @@ const gspanOutToDotGraph = (
             ` fontcolor="${palette[match[1]].hex()}" color="${palette[match[1]].hex()}" penwidth="5"]`;
         }
       }
-      // ----ending coloring dotgraph----
+      // ----ending coloring dotGraph----
 
       // dotgraphBackRenderedDoms.push([]);
       for (let j = 0; j < dotWhere[i].length; j++) {
@@ -865,6 +871,59 @@ const gspanOutToDotGraph = (
   };
 
   // -------------------
+
+  // remove subtrees that already exist in bigger trees
+  const removeSameSubTrees = (dotGraphsTemp, dotWhere, dotOrigins) => {
+    let i, j, k, m;
+    for (i = 0; i < dotOrigins.length; i++) {
+      for (j = i + 1; j < dotOrigins.length; j++) {
+        // if they have the same length then there is no way for one to be a subgraph of the other
+        if (dotOrigins[i][0][0].length === dotOrigins[j][0][0].length) {
+          continue;
+        }
+
+        //
+        const lesserIndex = dotOrigins[i][0][0].length < dotOrigins[j][0][0].length ? i : j;
+        const greaterIndex = dotOrigins[i][0][0].length < dotOrigins[j][0][0].length ? j : i;
+        for (m = 0; m < dotOrigins[lesserIndex][0][0].length; m++) {
+          //
+
+          for (k = 0; k < dotOrigins[greaterIndex][0][0].length; k++) {
+            if (
+              dotOrigins[lesserIndex][0][0][m][0] === dotOrigins[greaterIndex][0][0][k][0] &&
+              dotOrigins[lesserIndex][0][0][m][1] === dotOrigins[greaterIndex][0][0][k][1]
+            ) {
+              break;
+            }
+          }
+
+          if (k === dotOrigins[greaterIndex][0][0].length) {
+            break;
+          }
+
+          //
+        }
+        if (m === dotOrigins[lesserIndex][0][0].length) {
+          dotGraphsTemp.splice(lesserIndex, 1);
+          dotWhere.splice(lesserIndex, 1);
+          // dotSupport.splice(i,1);
+          if (dotOrigins[i][0][0].length < dotOrigins[j][0][0].length) {
+            dotOrigins.splice(lesserIndex, 1);
+            i--;
+            break;
+          }
+          dotOrigins.splice(lesserIndex, 1);
+          j--;
+          //
+        }
+
+        //
+      }
+    }
+
+    //
+  };
+  // -----------------
 
   // delete smaller frequent trees in order to reduce memory usage during merging. Keeps the trees with the higher edges/vertices available
   const keepLargestTreesCleanUp = (dotGraphsTemp, dotWhere, dotOrigins) => {
@@ -1014,6 +1073,7 @@ const gspanOutToDotGraph = (
   deleteTreesBasedOnNumberedLabels(dotGraphsTemp, dotWhere, dotOrigins);
   keepLargestTreesCleanUp(dotGraphsTemp, dotWhere, dotOrigins);
 
+  removeSameSubTrees(dotGraphsTemp, dotWhere, dotOrigins);
   //
 
   dotSupport = dotWhere.map((w) => {
