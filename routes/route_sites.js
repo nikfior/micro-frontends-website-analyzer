@@ -41,9 +41,13 @@ router.get("/getMenu", sessionCheck, getMenu);
  *         in: query
  *         description: id of the site to be analyzed
  *         required: true
+ *       - name: savedanalysisid
+ *         in: query
+ *         description: id of the saved analysis to be retrieved or reanalyzed
+ *         required: false
  *       - name: forcereanalyze
  *         in: query
- *         description: if set to true then the site is analyzed again with the given query parameters. Otherwise left to default, it just returns the saved analysis
+ *         description: if set to true then the site is analyzed again with the given query parameters and overwrites the saved analysis. Otherwise if left to default, it just returns the saved analysis
  *       - name: uppersubdirnum
  *         in: query
  *         description: maximum number of subdirectories to be analyzed
@@ -118,8 +122,12 @@ router.patch("/:id", sessionCheck, updateSite);
  *     parameters:
  *      -  name: id
  *         in: path
- *         description: id of the site to be deleted
+ *         description: id of the site or its corresponding analyses to be deleted
  *         required: true
+ *      -  name: savedanalysisid
+ *         in: query
+ *         description: id of the saved analysis to be deleted. If ommited, then the scraped site and all of the analyses are deleted
+ *         required: false
  *     responses:
  *       200:
  *         description: Site and analysis deleted successfully
@@ -130,7 +138,7 @@ router.patch("/:id", sessionCheck, updateSite);
  */
 router.delete("/:id", sessionCheck, deleteSite);
 
-// router.route("/").get(getAllSites).post(createSite);
-// router.route("/:id").get(getSite).patch(updateSite).delete(deleteSite);
+// // router.route("/").get(getAllSites).post(createSite);
+// // router.route("/:id").get(getSite).patch(updateSite).delete(deleteSite);
 
 module.exports = router;

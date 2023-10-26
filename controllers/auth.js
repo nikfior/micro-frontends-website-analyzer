@@ -46,7 +46,7 @@ const githubLoginCallback = async (req, res) => {
     res.clearCookie("frontendRedirectCallback");
 
     // For keeping Frontend session
-    const jwttoken = jwt.sign({ id: userDB._id }, process.env.COOKIE_JWT_SECRET);
+    const jwttoken = jwt.sign({ id: userDB.id }, process.env.COOKIE_JWT_SECRET);
 
     // For keeping API session
     res.cookie("jwttoken", jwttoken, { signed: true, maxAge: 1000 * 60 * 60 * 24 * 30 });
@@ -72,18 +72,21 @@ const getAccessToken = async ({ code, client_id, client_secret }) => {
     },
     {
       headers: {
-        "Content-Type": "application/json",
+        Accept: "application/json",
       },
     }
   );
-  const params = new URLSearchParams(response.data);
-  return params.get("access_token");
+
+  // I can use the following commented lines to get the token if it was not in json format if I didn't include the Accept: "application/json"
+  // // const params = new URLSearchParams(response.data);
+  // // return params.get("access_token");
+  return response.data.access_token;
 };
 
 const getGithubUser = async (token) => {
   const response = await axios.get("https://api.github.com/user", {
     headers: {
-      Authorization: "bearer " + token,
+      Authorization: "Bearer " + token,
     },
   });
   return response.data;

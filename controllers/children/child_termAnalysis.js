@@ -26,6 +26,7 @@ const max_old_space_size = require("v8").getHeapStatistics().total_available_siz
 process.on("message", (message) => {
   childTermAnalysis(
     message.sanitizedId,
+    message.sanitizedSavedAnalysisId,
     message.sanitizedUpperNodeLimit,
     message.sanitizedUpperSubdirNum,
     message.sanitizedPythonSupport,
@@ -42,6 +43,7 @@ process.on("message", (message) => {
 
 const childTermAnalysis = async (
   sanitizedId,
+  sanitizedSavedAnalysisId,
   sanitizedUpperNodeLimit,
   sanitizedUpperSubdirNum,
   sanitizedPythonSupport,
@@ -56,6 +58,12 @@ const childTermAnalysis = async (
     await connectDB(process.env.MONGO_DB_URI);
 
     const site = await DB_Model_Sites.findById(sanitizedId);
+
+    if (site.subdirsname.length < 2) {
+      throw new Error(
+        `Site has ${site.subdirsname.length} subdirectories. More that 1 subdirectories are needed in order to analyze the site.`
+      );
+    }
 
     sanitizedUpperSubdirNum = sanitizedUpperSubdirNum || "15";
     sanitizedPythonLowerNodeLimit = sanitizedPythonLowerNodeLimit || "3";
@@ -169,9 +177,9 @@ const childTermAnalysis = async (
     convertNodesDirArrTermsToBow(nodesDirArr);
 
     const newAnalysis = await DB_Model_Analysis.findOneAndUpdate(
-      { datasetSiteId: sanitizedId },
+      { _id: sanitizedSavedAnalysisId },
       {
-        status: `Completed at ${new Date()}. With minimum subdir support=${Math.min(
+        status: `Completed analyzing Ok. With minimum subdir support=${Math.min(
           ...gspanOut.support
         )}. Also UpperSubdirNum=${sanitizedUpperSubdirNum}, noOfMicrofrontends=${sanitizedNoOfMicrofrontends}; PythonUpperNodeLimit=${sanitizedPythonUpperNodeLimit}, PythonLowerNodeLimit=${sanitizedPythonLowerNodeLimit} and PythonSupport=${sanitizedPythonSupport}`,
         parameters: {
@@ -200,8 +208,9 @@ const childTermAnalysis = async (
           // tfidfNodesMatrix,
           // cosineSimilarityPerSubd,
         },
+        analysisDate: new Date(),
       },
-      { new: true, upsert: true }
+      { new: true } // , upsert: true }
     );
     console.log("Finito");
     process.exit();
@@ -210,8 +219,9 @@ const childTermAnalysis = async (
       const newAnalysis = await DB_Model_Analysis.findOneAndUpdate(
         { datasetSiteId: sanitizedId },
         {
-          status: "Error analyzing at " + new Date(),
+          status: "Error analyzing: " + error.message,
           analysis: null,
+          analysisDate: new Date(),
         },
         { new: true, upsert: true }
       );

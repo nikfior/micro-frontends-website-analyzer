@@ -5,6 +5,7 @@ const AnalysisSchema = new mongoose.Schema({
     type: String,
   },
   status: String,
+  analysisDate: Date,
   parameters: Object,
   analysis: Object,
 });

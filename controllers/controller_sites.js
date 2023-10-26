@@ -18,17 +18,23 @@ const getAllSites = async (req, res) => {
 
 const getMenu = async (req, res) => {
   try {
-    const sitesDB = await DB_Model_Sites.find({}, "_id url creationDate");
+    const sitesDB = await DB_Model_Sites.find({}, "url creationDate status");
     const userDB = await DB_Model_Users.findById(req.middlewareUserId);
     const analysis = await DB_Model_Analysis.find({}, "status parameters datasetSiteId");
     const sites = sitesDB.map((site) => {
-      const anal = analysis.find((x) => x.datasetSiteId === site._id.toString());
+      // // const anal = analysis.find((x) => x.datasetSiteId === site._id.toString());
+      const anal = [];
+      analysis.forEach((x) => {
+        if (x.datasetSiteId === site.id) {
+          anal.push({ savedAnalysisId: x.id, analysisStatus: x.status, parameters: x.parameters });
+        }
+      });
       return {
-        _id: site._id,
+        id: site.id,
         url: site.url,
         creationDate: site.creationDate,
-        status: anal?.status,
-        parameters: anal?.parameters,
+        scrapeStatus: site.status,
+        analyses: anal,
       };
     });
     res.status(200).json({ sites, username: userDB.githubUsername });
@@ -105,15 +111,33 @@ const updateSite = async (req, res) => {
 
 const deleteSite = async (req, res) => {
   try {
-    const sanitizedId = req.params.id.toString().replace(/\$/g, "");
-    const site = await DB_Model_Sites.findOneAndDelete({ _id: sanitizedId });
-    if (!site) {
-      return res.status(404).json({ msg: `No site with id: ${sanitizedId}` });
+    // // const sanitizedId = req.params.id.toString().replace(/\$/g, "");
+    const sanitizedId = req.params.id?.toString().match(/^[0-9a-f]*$/i)?.[0];
+    const sanitizedSavedAnalysisId = req.query.savedanalysisid?.toString().match(/^[0-9a-f]*$/i)?.[0];
+    if (!sanitizedId) {
+      throw new Error("Invalid or missing id");
     }
-    const analysis = await DB_Model_Analysis.findOneAndDelete({ datasetSiteId: sanitizedId });
-    res.status(200).json({ msg: "Site Deleted" });
+
+    const checkSiteExist = await DB_Model_Sites.findOne({ _id: sanitizedId }, "_id");
+    if (!checkSiteExist) {
+      return res.status(404).json({ msg: `No scraped site with id: ${sanitizedId}` });
+    }
+
+    // If I am given a savedanalysisid query then, I only delete the saved analysis and not the scraped site or the other analyses
+    if (sanitizedSavedAnalysisId) {
+      const analysis = await DB_Model_Analysis.findOneAndDelete({ _id: sanitizedSavedAnalysisId });
+      if (analysis) {
+        return res.status(200).json({ msg: "Analysis deleted" });
+      }
+      return res.status(404).json({ msg: `No analysis with id: ${sanitizedSavedAnalysisId}` });
+    }
+
+    const site = await DB_Model_Sites.findOneAndDelete({ _id: sanitizedId });
+
+    const analyses = await DB_Model_Analysis.deleteMany({ datasetSiteId: sanitizedId });
+    return res.status(200).json({ msg: "Site and analyses deleted" });
   } catch (error) {
-    res.status(500).json({ msg: error.message });
+    return res.status(500).json({ msg: error.message });
   }
 };
 

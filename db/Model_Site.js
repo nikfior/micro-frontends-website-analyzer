@@ -21,7 +21,6 @@ const TaskSchema = new mongoose.Schema({
     type: Array,
     required: [true, "html data must be provided"],
   },
-  analysis: Object,
 });
 
 module.exports = mongoose.model("Dataset", TaskSchema, "dataset");

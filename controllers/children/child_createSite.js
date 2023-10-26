@@ -68,6 +68,12 @@ const childCreateSite = async (url, useHeadlessBrowser) => {
       }
     }
 
+    if (subDirs.length < 2) {
+      throw new Error(
+        `Site has ${subDirs.length} subdirectories. More that 1 subdirectories are needed in order to analyze the site.`
+      );
+    }
+
     const site = await DB_Model_Sites.create({
       url: url,
       status: "Completed scraping Ok",
@@ -78,8 +84,19 @@ const childCreateSite = async (url, useHeadlessBrowser) => {
 
     process.exit();
   } catch (error) {
+    try {
+      const site = await DB_Model_Sites.create({
+        url: url,
+        status: "Error scraping: " + error.message,
+        html: [],
+        subdirsname: [],
+        creationDate: new Date(),
+      });
+    } catch {
+      console.log("Error saving the error in status: " + error.message);
+      process.exit();
+    }
     console.log("Error when scraping: " + error.message);
-    // TODO maybe inform the user via a database site creation with an error status
     process.exit();
   }
 };
@@ -98,6 +115,7 @@ const crawler = async (htmlData, url, useHeadlessBrowser, browser, page) => {
     try {
       // console.log(node.getAttribute("href"));
       // TODO also check if it is absolute and starts with the site url ALSO CHECK if it is the same url as before
+      // is it correct to omit urls from other domains?
       if (
         !node.getAttribute("href") ||
         (!node.getAttribute("href").startsWith(new URL(url).origin) &&
@@ -117,7 +135,7 @@ const crawler = async (htmlData, url, useHeadlessBrowser, browser, page) => {
         html.data = await page.content();
         html.url = page.url();
       }
-      // if it already exists then skip it
+      // if it already exists then skip it. I check it again because some subdirectories redirect to other ones that I might already have saved
       if (subdirsName.includes(html.request?.res.responseUrl || html.url)) {
         continue;
       }
@@ -134,18 +152,20 @@ const crawler = async (htmlData, url, useHeadlessBrowser, browser, page) => {
       //
     } catch (error) {
       // if there is an error with the request/response then just continue on with the rest of the subdirectories
-      // otherwise if it's an error with the program then save what is already done and throw an error
+      // otherwise if it's an error with the program then return with what is already done
       // if (error.message != "Cannot read property 'replace' of null" || !(error instanceof TypeError)) {
       if (!error.request && !error.response) {
-        const site = await DB_Model_Sites.create({
-          url: url,
-          status: "Completed scraping with error when scraping: " + error.message,
-          html: subdirHTMLArr,
-          subdirsname: subdirsName,
-          creationDate: new Date(),
-        });
+        // const site = await DB_Model_Sites.create({
+        //   url: url,
+        //   status: "Completed scraping with error when scraping: " + error.message,
+        //   html: subdirHTMLArr,
+        //   subdirsname: subdirsName,
+        //   creationDate: new Date(),
+        // });
 
-        throw error;
+        console.log(error.message);
+        return [subdirsName, subdirHTMLArr];
+        // throw error;
       }
     }
     //
