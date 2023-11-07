@@ -40,37 +40,37 @@ const getTermAnalysis = async (req, res) => {
 
     let newdAnalysis;
     let dbAnalysis;
-    // I then check if the user has given a savedanalysisid which corresponds to a previously saved analysis
+    // I then check if the user has given a savedanalysisid and site id which corresponds to a previously saved analysis
+    // I check if both the datasetSiteId and the savedanalysisid match one analysis because if I used just the findById I might have returned a saved analysis but the datasetsiteid might belong to another saved site since I do not previously check if the datasetsiteid and savedanalysis id correspond to the same saved analysis
+    // Essentially I use both the datasetSiteId in addition to the savedanalysisid which should be enough as a filter, just to make sure there is no discrepancy between the savedanalysisid (sanitizedSavedAnalysisId) and the scraped site's id (sanitizedId) that it corresponds to
     if (sanitizedSavedAnalysisId) {
-      dbAnalysis = await DB_Model_Analysis.findById(sanitizedSavedAnalysisId);
+      dbAnalysis = await DB_Model_Analysis.findOne({
+        _id: sanitizedSavedAnalysisId,
+        datasetSiteId: sanitizedId,
+      });
     }
     // I enter here If there is a saved analysis which corresponds to the savedanalysisid
     if (dbAnalysis) {
-      // if the forcereanalyze query is not set, I just return the saved analysis which corresponds to that savedanalysisid
-      if (
-        !req.query.forcereanalyze?.toString() ||
-        req.query.forcereanalyze?.toString().toLowerCase() === "false"
-      ) {
+      // if the forcereanalyze query is not set to true, then I just return the saved analysis which corresponds to that savedanalysisid
+      if (req.query.forcereanalyze?.toString().toLowerCase() !== "true") {
         return res.json(dbAnalysis);
       }
 
-      // if the forcereanalyze query is set, I then reanalyze it and overwrite the previous analysis that corresponds to that savedanalysisid
+      // if the forcereanalyze query is set to true, I then reanalyze it and overwrite the previous analysis that corresponds to that savedanalysisid
       // While it is analyzed, return and save to db an "Analyzing..." status
-      // I also use the datasetSiteId as a filter in addition to the savedanalysisid which should be enough, just to make sure there is no discrepancy between the savedanalysisid (sanitizedSavedAnalysisId) and the scraped site's id (sanitizedId) that it corresponds to
       newdAnalysis = await DB_Model_Analysis.findOneAndUpdate(
         { _id: sanitizedSavedAnalysisId, datasetSiteId: sanitizedId },
         { status: "Analyzing... since " + new Date(), analysis: null, parameters: null },
         { new: true } // , upsert: true }
       );
-
-      if (!newdAnalysis) {
-        throw new Error(
-          "Error starting the analysis. Possible discrepancy between savedanalysisid and scraped site's id"
-        );
-      }
     }
 
-    // if there is not a saved analysis that corresponds to the savedanalysisid because the savedanalysisid didn't correspond with a saved analysis or because it was not provided, then just analyze and save it to db with a newly created savedanalysisid
+    // if a savedanalysisid and site id was given but did not correspond to any savedanalysisid and site id in the database, then return a 404.
+    else if (sanitizedSavedAnalysisId && !dbAnalysis) {
+      return res.status(404).json({ msg: "A saved analysis with the specified parameters was not found" });
+    }
+
+    // if a savedanalysisid was not provided, then just analyze and save it to db with a newly created savedanalysisid
     // While it is created, return and save to db an "Analyzing..." status
     else {
       newdAnalysis = await DB_Model_Analysis.create({

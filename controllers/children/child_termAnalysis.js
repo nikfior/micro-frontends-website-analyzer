@@ -17,8 +17,9 @@ const { breadth } = require("treeverse");
 const { writeFileSync, unlinkSync } = require("fs");
 const { spawnSync } = require("child_process");
 const distinctColors = require("distinct-colors").default; // TODO make 20 nice distinct colors and make the global for each nodeLabel
-var palette;
+var paletteKmeans, paletteSingleLink, paletteCompleteLink;
 const max_old_space_size = require("v8").getHeapStatistics().total_available_size / 1024 / 1024;
+var hierarchicalCluster = require("hierarchical-clustering");
 // const clone = require("clone");
 
 // ----
@@ -137,35 +138,70 @@ const childTermAnalysis = async (
 
     // [node(terms) x node(terms)] -> clusters
     // cos similarity between all nodes using their terms bows
-    console.log("Before getKmeansNodexNode");
-    const { maxAllres, clusteredBow } = getKmeansNodexNode(nodesDirArr, sanitizedNoOfMicrofrontends);
-    // if there is no sanitizedNoOfMicrofrontends parameter then assign the one that was chosen by the algorithm so that I can export the value later
-    sanitizedNoOfMicrofrontends ??= maxAllres.k;
+    console.log("Before getKmeansNodexNode and getHierarchicalNodexNode");
+    const { maxAllresKmeans, clusteredBowKmeans } = getKmeansNodexNode(
+      nodesDirArr,
+      sanitizedNoOfMicrofrontends
+    );
+    const { maxAllresSingleLink, clusteredBowSingleLink, maxAllresCompleteLink, clusteredBowCompleteLink } =
+      getHierarchicalNodexNode(nodesDirArr, sanitizedNoOfMicrofrontends);
     //
+    // if there is no sanitizedNoOfMicrofrontends parameter then assign the one that was chosen by the algorithm so that I can export the value later
+    // //sanitizedNoOfMicrofrontends ??= maxAllres.k;
+    //
+    // I both modify the dom and make the gspan format for efficiency purposes so that I don't have to iterate the doms twice
     console.log("Before convertToGspanFormatAndModifyDom");
-    const gspanIn = convertToGspanFormatAndModifyDom(domFromAllSubdirs, sanitizedId, maxAllres, site.url);
+    const { gspanFormatKmeans, gspanFormatSingleLink, gspanFormatCompleteLink } =
+      convertToGspanFormatAndModifyDom(
+        domFromAllSubdirs,
+        sanitizedId,
+        maxAllresKmeans,
+        maxAllresSingleLink,
+        maxAllresCompleteLink,
+        site.url
+      );
 
     // adds stylization info (colored rectangles) to dom elements that belong in a cluster (doesn't actually stylize them)
-    stylizeDomElementsByClusterLabel(domFromAllSubdirs, maxAllres);
+    stylizeDomElementsByClusterLabel(
+      domFromAllSubdirs,
+      maxAllresKmeans,
+      maxAllresSingleLink,
+      maxAllresCompleteLink
+    );
 
     console.log("Before pythonGspan");
-    const gspanOut = pythonGspan(
+    const gspanOutKmeans = pythonGspan(
       sanitizedId,
       sanitizedPythonUpperNodeLimit,
       sanitizedPythonLowerNodeLimit,
-      sanitizedPythonSupport
+      sanitizedPythonSupport,
+      "gspanInKmeans.txt"
+    );
+    const gspanOutSingleLink = pythonGspan(
+      sanitizedId,
+      sanitizedPythonUpperNodeLimit,
+      sanitizedPythonLowerNodeLimit,
+      sanitizedPythonSupport,
+      "gspanInSingleLink.txt"
+    );
+    const gspanOutCompleteLink = pythonGspan(
+      sanitizedId,
+      sanitizedPythonUpperNodeLimit,
+      sanitizedPythonLowerNodeLimit,
+      sanitizedPythonSupport,
+      "gspanInCompleteLink.txt"
     );
 
     // const { readFileSync } = require("fs");
     // const gspanOut = JSON.parse(readFileSync("debugtest.txt"));
 
     console.log("Before gspanOutToDotGraph");
-    const dotgraphTrees = gspanOut.graphs
+    const dotgraphTreesKmeans = gspanOutKmeans.graphs
       ? gspanOutToDotGraph(
-          gspanOut,
+          gspanOutKmeans,
           domFromAllSubdirs,
-          clusteredBow,
-          maxAllres,
+          clusteredBowKmeans,
+          maxAllresKmeans,
           // sanitizedUpperNodeLimit,
           sanitizedLowerNodeLimit,
           useAggressiveTrimming,
@@ -173,14 +209,50 @@ const childTermAnalysis = async (
         )
       : null;
 
+    const dotgraphTreesSingleLink = gspanOutSingleLink.graphs
+      ? gspanOutToDotGraph(
+          gspanOutSingleLink,
+          domFromAllSubdirs,
+          clusteredBowSingleLink,
+          maxAllresSingleLink,
+          // sanitizedUpperNodeLimit,
+          sanitizedLowerNodeLimit,
+          useAggressiveTrimming,
+          sanitizedUseEmbeddedFrequentTreeMining
+        )
+      : null;
+
+    const dotgraphTreesCompleteLink = gspanOutCompleteLink.graphs
+      ? gspanOutToDotGraph(
+          gspanOutCompleteLink,
+          domFromAllSubdirs,
+          clusteredBowCompleteLink,
+          maxAllresCompleteLink,
+          // sanitizedUpperNodeLimit,
+          sanitizedLowerNodeLimit,
+          useAggressiveTrimming,
+          sanitizedUseEmbeddedFrequentTreeMining
+        )
+      : null;
+
+    // adds the stylizing info for the frequent dotGraphs trees' leaves and for the html elements that correspond to those dotgraph trees' leaves
+    addStylesForDotGraphsInDoms(dotgraphTreesKmeans, domFromAllSubdirs, "Kmeans", paletteKmeans);
+    addStylesForDotGraphsInDoms(dotgraphTreesKmeans, domFromAllSubdirs, "SingleLink", paletteSingleLink);
+    addStylesForDotGraphsInDoms(dotgraphTreesKmeans, domFromAllSubdirs, "CompleteLink", paletteCompleteLink);
+
     // make terms of nodesDirArr from array to bow
     convertNodesDirArrTermsToBow(nodesDirArr);
+
+    // not saving dotOrigins due to its size
+    delete dotgraphTreesKmeans.dotOrigins;
+    delete dotgraphTreesSingleLink.dotOrigins;
+    delete dotgraphTreesCompleteLink.dotOrigins;
 
     const newAnalysis = await DB_Model_Analysis.findOneAndUpdate(
       { _id: sanitizedSavedAnalysisId },
       {
-        status: `Completed analyzing Ok. With minimum subdir support=${Math.min(
-          ...gspanOut.support
+        status: `Completed analyzing Ok. With minimum kmeans subdir support=${Math.min(
+          ...gspanOutKmeans.support // TODOTODOTODO
         )}. Also UpperSubdirNum=${sanitizedUpperSubdirNum}, noOfMicrofrontends=${sanitizedNoOfMicrofrontends}; PythonUpperNodeLimit=${sanitizedPythonUpperNodeLimit}, PythonLowerNodeLimit=${sanitizedPythonLowerNodeLimit} and PythonSupport=${sanitizedPythonSupport}`,
         parameters: {
           // sanitizedUpperNodeLimit,
@@ -189,16 +261,22 @@ const childTermAnalysis = async (
           sanitizedLowerNodeLimit,
           sanitizedPythonUpperNodeLimit,
           sanitizedPythonLowerNodeLimit,
-          sanitizedNoOfMicrofrontends,
+          sanitizedNoOfMicrofrontends, // TODO what to export when left blank
         },
         analysis: {
-          dotgraphTrees,
+          dotgraphTreesKmeans,
+          dotgraphTreesSingleLink,
+          dotgraphTreesCompleteLink,
           // gspanOut: { graphs: gspanOut.graphs, support: gspanOut.support, where: gspanOut.where }, // removed gspanOut.origins
           // gspanIn,
 
-          clusteredBow,
+          clusteredBowKmeans,
+          clusteredBowSingleLink,
+          clusteredBowCompleteLink,
           // testcluster: [...testcluster],
-          maxAllres,
+          maxAllresKmeans,
+          maxAllresSingleLink,
+          maxAllresCompleteLink,
           subdirsname: site.subdirsname,
           nodes: nodesDirArr,
           backRenderedDoms: domFromAllSubdirs.map((dom) => dom.toString()),
@@ -716,86 +794,6 @@ const gspanOutToDotGraph = (
 
   // -----------------
 
-  const addStylesForDotGraphsInDoms = (dotOrigins, dotWhere, domFromAllSubdirs, dotGraphs) => {
-    // // ----find height of origin tree----
-    // let numCommonVertex = 0;
-    // for (let i = 0; i < dotOrigins.length; i++) {
-    //   for (let j = i + 1; j < dotOrigins.length; j++) {
-    //     if (dotOrigins[i][0] === dotOrigins[j][0]) {
-    //       numCommonVertex++;
-    //     }
-    //   }
-    // }
-    // const treeHeight = dotOrigins.length - numCommonVertex + 1;
-    // // ---- end finding tree height----
-
-    // const dotgraphBackRenderedDoms = [];
-    for (let i = 0; i < dotOrigins.length; i++) {
-      //
-      // ----color the dotGraph as well to match with the html----
-      for (let k = 0; k < dotGraphs[i].length; k++) {
-        const match = dotGraphs[i][k].match(/\d+ \[label="(\d+)/);
-        if (match) {
-          dotGraphs[i][k] =
-            dotGraphs[i][k].slice(0, -1) +
-            ` fontcolor="${palette[match[1]].hex()}" color="${palette[match[1]].hex()}" penwidth="5"]`;
-        }
-      }
-      // ----ending coloring dotGraph----
-
-      // dotgraphBackRenderedDoms.push([]);
-      for (let j = 0; j < dotWhere[i].length; j++) {
-        // const dom = clone(domFromAllSubdirs[dotWhere[i][j]]);
-        const dom = domFromAllSubdirs[dotWhere[i][j]];
-        const digraphIndex = dotGraphs[i][0].split(" ")[1];
-
-        // // mutates the dom itself for the display
-        // dotOrigins[i][j].forEach((origin) => {
-        //   origin.forEach((line) => {
-        //     dom
-        //       .querySelector(`[vertexCounter=${line[0]}]`)
-        //       .setAttribute("style", `border-style: solid;border-color: red;border-width: thick;`);
-        //     dom
-        //       .querySelector(`[vertexCounter=${line[1]}]`)
-        //       .setAttribute("style", `border-style: solid;border-color: red;border-width: thick;`);
-        //   });
-        // });
-
-        for (const origin of dotOrigins[i][j]) {
-          for (const line of origin) {
-            const olddomone = dom.querySelector(`[vertexCounter=${line[0]}]`);
-            // I don't want to make a border around body because it makes it messy and doesn't really help
-            if (olddomone.tagName !== "BODY") {
-              const oldone = olddomone.getAttribute("digraphLabelStylize");
-              if ((oldone && !oldone.includes(`;${digraphIndex};`)) || !oldone) {
-                olddomone.setAttribute(
-                  "digraphLabelStylize",
-                  oldone ? oldone + `${digraphIndex};` : `;${digraphIndex};`
-                );
-              }
-            }
-
-            const olddomtwo = dom.querySelector(`[vertexCounter=${line[1]}]`);
-            if (olddomtwo.tagName !== "BODY") {
-              const oldtwo = olddomtwo.getAttribute("digraphLabelStylize");
-              if ((oldtwo && !oldtwo.includes(`;${digraphIndex};`)) || !oldtwo) {
-                olddomtwo.setAttribute(
-                  "digraphLabelStylize",
-                  oldtwo ? oldtwo + `${digraphIndex};` : `;${digraphIndex};`
-                );
-              }
-            }
-            //
-          }
-        }
-
-        // dotgraphBackRenderedDoms[i].push(dom.toString());
-      }
-    }
-  };
-
-  // -----------------
-
   const createDotFreqTreeFromOrigin = (origin, dom, maxAllresIdxs, title) => {
     const freqTree = new Set();
     freqTree.add(`digraph ${title} {`);
@@ -1110,11 +1108,7 @@ const gspanOutToDotGraph = (
 
   const dotGraphs = createDotGraphsFromDotGraphsTemp(dotGraphsTemp, clusteredBow);
 
-  // adds the stylizing info for the frequent dotGraphs trees in order to be shown on the html
-  addStylesForDotGraphsInDoms(dotOrigins, dotWhere, domFromAllSubdirs, dotGraphs);
-
-  // not returning dotOrigins due to its size
-  return { dotGraphs, dotWhere, dotSupport, dotGraphsTemp };
+  return { dotGraphs, dotWhere, dotSupport, dotGraphsTemp, dotOrigins };
 };
 
 // ----
@@ -1123,7 +1117,8 @@ const pythonGspan = (
   sanitizedId,
   sanitizedPythonUpperNodeLimit,
   sanitizedPythonLowerNodeLimit,
-  sanitizedPythonSupport
+  sanitizedPythonSupport,
+  fileNameEnding
 ) => {
   let pyProg;
 
@@ -1141,7 +1136,7 @@ const pythonGspan = (
       "True",
       "-d",
       "True",
-      sanitizedId + "gspanIn.txt",
+      sanitizedId + fileNameEnding,
     ];
 
     pyProg = spawnSync("pypy", pyArgs, { maxBuffer: Infinity });
@@ -1152,7 +1147,7 @@ const pythonGspan = (
   }
 
   // remove file for gspan after finishing
-  unlinkSync(sanitizedId + "gspanIn.txt");
+  unlinkSync(sanitizedId + fileNameEnding);
 
   if (pyProg.error) {
     console.log("python error: ", pyProg.error);
@@ -1216,8 +1211,17 @@ const pythonGspan = (
 
 // ----
 
-const convertToGspanFormatAndModifyDom = (domFromAllSubdirs, sanitizedId, maxAllres, url) => {
-  let gspanFormat = [];
+const convertToGspanFormatAndModifyDom = (
+  domFromAllSubdirs,
+  sanitizedId,
+  maxAllresKmeans,
+  maxAllresSingleLink,
+  maxAllresCompleteLink,
+  url
+) => {
+  let gspanFormatKmeans = [];
+  let gspanFormatSingleLink = [];
+  let gspanFormatCompleteLink = [];
   let vertexCounter;
   let i;
 
@@ -1243,10 +1247,21 @@ const convertToGspanFormatAndModifyDom = (domFromAllSubdirs, sanitizedId, maxAll
     }
 
     let label = node.nodeType === 1 ? node.getAttribute("customId") || "-1" : "-1";
-    const kmeansClusterLabel = label === "-1" ? undefined : maxAllres.idxs[label.split(";")[1]];
+    const kmeansClusterLabel = label === "-1" ? undefined : maxAllresKmeans.idxs[label.split(";")[1]];
+    const singleLinkClusterLabel = label === "-1" ? undefined : maxAllresSingleLink.idxs[label.split(";")[1]];
+    const completeLinkClusterLabel =
+      label === "-1" ? undefined : maxAllresCompleteLink.idxs[label.split(";")[1]];
 
     // add vertices to gspanFormat array
-    gspanFormat[i].push(`v ${vertexCounter} ${kmeansClusterLabel !== undefined ? kmeansClusterLabel : "-1"}`);
+    gspanFormatKmeans[i].push(
+      `v ${vertexCounter} ${kmeansClusterLabel !== undefined ? kmeansClusterLabel : "-1"}`
+    );
+    gspanFormatSingleLink[i].push(
+      `v ${vertexCounter} ${singleLinkClusterLabel !== undefined ? singleLinkClusterLabel : "-1"}`
+    );
+    gspanFormatCompleteLink[i].push(
+      `v ${vertexCounter} ${completeLinkClusterLabel !== undefined ? completeLinkClusterLabel : "-1"}`
+    );
 
     // add a vertex counter so I know that I have iterate it and added it to the gspanFormat array. Check nodeType because textNodes (type=3) don't have attributes
     if (node.nodeType !== 3) {
@@ -1255,7 +1270,11 @@ const convertToGspanFormatAndModifyDom = (domFromAllSubdirs, sanitizedId, maxAll
 
     // add edges to gspanFormat array
     if (node.tagName !== "BODY") {
-      gspanFormat[i].push(`e ${node.parentNode.getAttribute("vertexCounter")} ${vertexCounter} -1`);
+      gspanFormatKmeans[i].push(`e ${node.parentNode.getAttribute("vertexCounter")} ${vertexCounter} -1`);
+      gspanFormatSingleLink[i].push(`e ${node.parentNode.getAttribute("vertexCounter")} ${vertexCounter} -1`);
+      gspanFormatCompleteLink[i].push(
+        `e ${node.parentNode.getAttribute("vertexCounter")} ${vertexCounter} -1`
+      );
     }
 
     vertexCounter++;
@@ -1266,8 +1285,12 @@ const convertToGspanFormatAndModifyDom = (domFromAllSubdirs, sanitizedId, maxAll
   // loop for every subdir
   for (i = 0; i < domFromAllSubdirs.length; i++) {
     vertexCounter = 0;
-    gspanFormat.push([]);
-    gspanFormat[i].push("t # " + i);
+    gspanFormatKmeans.push([]);
+    gspanFormatKmeans[i].push("t # " + i);
+    gspanFormatSingleLink.push([]);
+    gspanFormatSingleLink[i].push("t # " + i);
+    gspanFormatCompleteLink.push([]);
+    gspanFormatCompleteLink[i].push("t # " + i);
     const body = domFromAllSubdirs[i].getElementsByTagName("body")[0];
 
     // when html code is bad it may lead to non body tag. Deprecated check. It now does this check at the scraping stage.
@@ -1279,12 +1302,18 @@ const convertToGspanFormatAndModifyDom = (domFromAllSubdirs, sanitizedId, maxAll
 
     // modify dom to make relative css and images, absolute
     cssAndImgToAbsoluteHref(domFromAllSubdirs[i], url);
-    gspanFormat[i] = trimTree(gspanFormat[i]);
+    gspanFormatKmeans[i] = trimTree(gspanFormatKmeans[i]);
+    gspanFormatSingleLink[i] = trimTree(gspanFormatSingleLink[i]);
+    gspanFormatCompleteLink[i] = trimTree(gspanFormatCompleteLink[i]);
   }
 
-  gspanFormat[i - 1].push("t # -1");
-  writeFileSync(sanitizedId + "gspanIn.txt", gspanFormat.flat(10).join("\n"));
-  return gspanFormat;
+  gspanFormatKmeans[i - 1].push("t # -1");
+  gspanFormatSingleLink[i - 1].push("t # -1");
+  gspanFormatCompleteLink[i - 1].push("t # -1");
+  writeFileSync(sanitizedId + "gspanInKmeans.txt", gspanFormatKmeans.flat(10).join("\n"));
+  writeFileSync(sanitizedId + "gspanInSingleLink.txt", gspanFormatSingleLink.flat(10).join("\n"));
+  writeFileSync(sanitizedId + "gspanInCompleteLink.txt", gspanFormatCompleteLink.flat(10).join("\n"));
+  return { gspanFormatKmeans, gspanFormatSingleLink, gspanFormatCompleteLink };
 };
 
 const trimTree = (tree) => {
@@ -1376,7 +1405,7 @@ const trimTree = (tree) => {
 // -----
 //
 
-// cos similarity between all nodes using their terms bows
+// cos similarity between all nodes using their terms bows and then kmeans clustering
 const getKmeansNodexNode = (nodesDirArr, sanitizedNoOfMicrofrontends) => {
   //
   console.log("first");
@@ -1413,7 +1442,7 @@ const getKmeansNodexNode = (nodesDirArr, sanitizedNoOfMicrofrontends) => {
   // ----
   let max = -2;
   let noOfClusters = -2; // number of clusters with max silhouette
-  let maxAllres;
+  let maxAllresKmeans;
   let upperLimit =
     nodexnode[0].length > 6
       ? nodexnode[0].length / 3 > 20
@@ -1437,20 +1466,130 @@ const getKmeansNodexNode = (nodesDirArr, sanitizedNoOfMicrofrontends) => {
       if (coef > max) {
         // console.log("place", i, "number", coef);
         max = coef;
-        maxAllres = res;
+        maxAllresKmeans = res;
         noOfClusters = c;
       }
     }
-    // console.log("c", c, "inmax", inmax);//-----------
-    // console.log(max);
+
+    //
   } // end of choosing number of clusters
-  // console.log("noofcluster", noOfClusters, "max", max);//------------
-  // console.log("res", maxAllres, "max", max, "clusters", noOfClusters);
-  // console.log("max", max, "clusters", noOfClusters);
+  //
+  //
+  //
 
   // ------
   console.log("before clusteredNodes and clustered Bow");
+
+  const clusteredBowKmeans = makeClusteredBow(maxAllresKmeans, allNodesFromAllSubds);
+
+  return { maxAllresKmeans, clusteredBowKmeans };
+};
+
+//
+// this function is basically the getKmeansNodexNode but with a few differences to adjust it for hierarchical clustering instead of kmeans
+// cos similarity between all nodes using their terms bows and then hierarchical (single link and complete link) clustering
+const getHierarchicalNodexNode = (nodesDirArr, sanitizedNoOfMicrofrontends) => {
+  //
+  console.log("hierarchical first");
+  const allNodesFromAllSubds = nodesDirArr.flat(10); // allNodesFromAllSubds: all nodes from all subds in one array
+
+  console.log("hierarchical second with length " + allNodesFromAllSubds.length);
+  //
+  // better efficiency to calculate bows once. Maybe create it in the beginning instead of allNodesFromAllSubds
+  // let allNodesFromAllSubdsTermsBow = [];
+  // for (let i = 0; i < allNodesFromAllSubds.length; i++) {
+  //   allNodesFromAllSubdsTermsBow.push(as.bow(allNodesFromAllSubds[i].terms));
+  // }
+  // console.log("in getKmeansNodexNode second with", allNodesFromAllSubds.length, "nodes");
+  //
+
+  let nodexnode = [];
+  for (let i = 0; i < allNodesFromAllSubds.length; i++) {
+    nodexnode.push([]);
+    console.log("In " + i);
+    for (let k = 0; k < i; k++) {
+      nodexnode[i].push(nodexnode[k][i]);
+    }
+
+    for (let j = i; j < allNodesFromAllSubds.length; j++) {
+      nodexnode[i].push(
+        similarity.bow.cosine(as.bow(allNodesFromAllSubds[i].terms), as.bow(allNodesFromAllSubds[j].terms))
+      );
+    }
+  }
+  console.log("hierarchical third");
+  if (nodexnode.length === 0) {
+    throw new Error("No word found. Check if site is rendered properly");
+  }
+  // ----
+  let singleLinkMaxCoef = -2;
+  let completeLinkMaxCoef = -2;
+  let singleLinkNoOfClusters = -2; // number of clusters with max silhouette for single link
+  let completeLinkNoOfClusters = -2; // number of clusters with max silhouette for complete link
+  let maxSingleLinkLabels;
+  let maxCompleteLinkLabels;
+  let upperLimit =
+    nodexnode[0].length > 6
+      ? nodexnode[0].length / 3 > 20
+        ? 20
+        : nodexnode[0].length / 3
+      : nodexnode[0].length; // TODO find better upper limit
+  upperLimit = sanitizedNoOfMicrofrontends || upperLimit;
+
+  for (let c = 2; c <= upperLimit; c++) {
+    // hierarchical clustering-----
+    const singleLinkLevels = hierarchicalCluster({
+      input: nodexnode,
+      distance: costumDistanceFormula,
+      linkage: "single",
+      minClusters: c,
+    });
+    const singleLinkClusters = singleLinkLevels[singleLinkLevels.length - 1].clusters;
+    const singleLinkLabels = convertHierarchicalToLabel(singleLinkClusters);
+    let singleLinkCoef = silhouetteCoefficient(nodexnode, singleLinkLabels, costumDistanceFormula);
+
+    if (!isNaN(singleLinkCoef) && singleLinkCoef > singleLinkMaxCoef) {
+      singleLinkMaxCoef = singleLinkCoef;
+      maxSingleLinkLabels = singleLinkLabels;
+      singleLinkNoOfClusters = c;
+    }
+
+    var completeLinkLevels = hierarchicalCluster({
+      input: nodexnode,
+      distance: costumDistanceFormula,
+      linkage: "complete",
+      minClusters: c,
+    });
+    const completeLinkClusters = completeLinkLevels[completeLinkLevels.length - 1].clusters;
+    const completeLinkLabels = convertHierarchicalToLabel(completeLinkClusters);
+    let completeLinkCoef = silhouetteCoefficient(nodexnode, completeLinkLabels, costumDistanceFormula);
+
+    if (!isNaN(completeLinkCoef) && completeLinkCoef > completeLinkMaxCoef) {
+      completeLinkMaxCoef = completeLinkCoef;
+      maxCompleteLinkLabels = completeLinkLabels;
+      completeLinkNoOfClusters = c;
+    }
+    // ------------- end of hierarchichal clustering
+    //
+  } // end of choosing number of clusters
+  //
+  //
+  const maxAllresSingleLink = { k: singleLinkNoOfClusters, idxs: maxSingleLinkLabels };
+  const maxAllresCompleteLink = { k: completeLinkNoOfClusters, idxs: maxCompleteLinkLabels };
+
+  // ------
+  console.log("hierarchical before clusteredNodes and clustered Bow");
+
+  const clusteredBowSingleLink = makeClusteredBow(maxAllresSingleLink, allNodesFromAllSubds);
+  const clusteredBowCompleteLink = makeClusteredBow(maxAllresCompleteLink, allNodesFromAllSubds);
+
+  return { maxAllresSingleLink, clusteredBowSingleLink, maxAllresCompleteLink, clusteredBowCompleteLink };
+};
+
+const makeClusteredBow = (maxAllres, allNodesFromAllSubds) => {
   let clusteredNodes = [];
+  const noOfClusters = maxAllres.k;
+
   for (let i = 0; i < noOfClusters; i++) {
     clusteredNodes.push([]);
   }
@@ -1468,7 +1607,7 @@ const getKmeansNodexNode = (nodesDirArr, sanitizedNoOfMicrofrontends) => {
     );
   }
 
-  return { maxAllres, clusteredBow };
+  return clusteredBow;
 };
 
 const costumDistanceFormula = (a, b) => {
@@ -1597,21 +1736,39 @@ const cssAndImgToAbsoluteHref = (dom, url) => {
 
 //
 //
-const stylizeDomElementsByClusterLabel = (domFromAllSubdirs, maxAllres) => {
-  palette = distinctColors({ count: maxAllres.k });
+const stylizeDomElementsByClusterLabel = (
+  domFromAllSubdirs,
+  maxAllresKmeans,
+  maxAllresSingleLink,
+  maxAllresCompleteLink
+) => {
+  paletteKmeans = distinctColors({ count: maxAllresKmeans.k });
+  paletteSingleLink = distinctColors({ count: maxAllresSingleLink.k });
+  paletteCompleteLink = distinctColors({ count: maxAllresCompleteLink.k });
 
   for (let dom of domFromAllSubdirs) {
     const nodes = dom.querySelectorAll("[customId]");
     for (let node of nodes) {
-      const kmeansClusterLabel = maxAllres.idxs[node.getAttribute("customId").split(";")[1]];
+      const kmeansClusterLabel = maxAllresKmeans.idxs[node.getAttribute("customId").split(";")[1]];
+      const singleLinkClusterLabel = maxAllresSingleLink.idxs[node.getAttribute("customId").split(";")[1]];
+      const completeLinkClusterLabel =
+        maxAllresCompleteLink.idxs[node.getAttribute("customId").split(";")[1]];
       // node.setAttribute(
       //   "style",
       //   `border-style: solid;border-color: ${palette[kmeansClusterLabel].hex()};border-width: thick;`
       // );
 
       node.setAttribute(
-        "nodeLabelAndColorStylize",
-        `${kmeansClusterLabel};${palette[kmeansClusterLabel].hex()}`
+        "nodeLabelAndColorStylizeKmeans",
+        `${kmeansClusterLabel};${paletteKmeans[kmeansClusterLabel].hex()}`
+      );
+      node.setAttribute(
+        "nodeLabelAndColorStylizeSingleLink",
+        `${singleLinkClusterLabel};${paletteSingleLink[singleLinkClusterLabel].hex()}`
+      );
+      node.setAttribute(
+        "nodeLabelAndColorStylizeCompleteLink",
+        `${completeLinkClusterLabel};${paletteCompleteLink[completeLinkClusterLabel].hex()}`
       );
     }
   }
@@ -1658,6 +1815,106 @@ const convertNodesDirArrTermsToBow = (nodesDirArr) => {
           return b[1] - a[1];
         })
       );
+    }
+  }
+};
+
+// converts the return array of the hierarchical-clustering package (which is a two level array where each level second level represents a cluster and the numbers inside it the index of the datapoint) to an array where each index represents a data point and its value the label of the cluster in which it belongs.
+// eg. converts from [[0,4,2],[1,3]] to [0,1,0,1,0] for two clusters
+const convertHierarchicalToLabel = (clusters) => {
+  if (clusters.length < 1) {
+    return -1;
+  }
+
+  const labels = [];
+  for (let i = 0; i < clusters.length; i++) {
+    for (let j = 0; j < clusters[i].length; j++) {
+      labels[clusters[i][j]] = i;
+    }
+  }
+  return labels;
+};
+
+//
+//
+// adds the stylizing info for the frequent dotGraphs trees' leaves and for the html elements that correspond to those dotgraph trees' leaves
+const addStylesForDotGraphsInDoms = (dotgraphTrees, domFromAllSubdirs, clusteringMethod, palette) => {
+  const { dotOrigins, dotWhere, dotGraphs } = dotgraphTrees;
+  const digraphLabelStylizeAttributeName = "digraphLabelStylize" + clusteringMethod;
+
+  // // ----find height of origin tree----
+  // let numCommonVertex = 0;
+  // for (let i = 0; i < dotOrigins.length; i++) {
+  //   for (let j = i + 1; j < dotOrigins.length; j++) {
+  //     if (dotOrigins[i][0] === dotOrigins[j][0]) {
+  //       numCommonVertex++;
+  //     }
+  //   }
+  // }
+  // const treeHeight = dotOrigins.length - numCommonVertex + 1;
+  // // ---- end finding tree height----
+
+  // const dotgraphBackRenderedDoms = [];
+  for (let i = 0; i < dotOrigins.length; i++) {
+    //
+    // ----color the dotGraph as well to match with the html----
+    for (let k = 0; k < dotGraphs[i].length; k++) {
+      const match = dotGraphs[i][k].match(/\d+ \[label="(\d+)/);
+      if (match) {
+        dotGraphs[i][k] =
+          dotGraphs[i][k].slice(0, -1) +
+          ` fontcolor="${palette[match[1]].hex()}" color="${palette[match[1]].hex()}" penwidth="5"]`;
+      }
+    }
+    // ----ending coloring dotGraph----
+
+    // dotgraphBackRenderedDoms.push([]);
+    for (let j = 0; j < dotWhere[i].length; j++) {
+      // const dom = clone(domFromAllSubdirs[dotWhere[i][j]]);
+      const dom = domFromAllSubdirs[dotWhere[i][j]];
+      const digraphIndex = dotGraphs[i][0].split(" ")[1];
+
+      // // mutates the dom itself for the display
+      // dotOrigins[i][j].forEach((origin) => {
+      //   origin.forEach((line) => {
+      //     dom
+      //       .querySelector(`[vertexCounter=${line[0]}]`)
+      //       .setAttribute("style", `border-style: solid;border-color: red;border-width: thick;`);
+      //     dom
+      //       .querySelector(`[vertexCounter=${line[1]}]`)
+      //       .setAttribute("style", `border-style: solid;border-color: red;border-width: thick;`);
+      //   });
+      // });
+
+      for (const origin of dotOrigins[i][j]) {
+        for (const line of origin) {
+          const olddomone = dom.querySelector(`[vertexCounter=${line[0]}]`);
+          // I don't want to make a border around body because it makes it messy and doesn't really help
+          if (olddomone.tagName !== "BODY") {
+            const oldone = olddomone.getAttribute(digraphLabelStylizeAttributeName);
+            if ((oldone && !oldone.includes(`;${digraphIndex};`)) || !oldone) {
+              olddomone.setAttribute(
+                digraphLabelStylizeAttributeName,
+                oldone ? oldone + `${digraphIndex};` : `;${digraphIndex};`
+              );
+            }
+          }
+
+          const olddomtwo = dom.querySelector(`[vertexCounter=${line[1]}]`);
+          if (olddomtwo.tagName !== "BODY") {
+            const oldtwo = olddomtwo.getAttribute(digraphLabelStylizeAttributeName);
+            if ((oldtwo && !oldtwo.includes(`;${digraphIndex};`)) || !oldtwo) {
+              olddomtwo.setAttribute(
+                digraphLabelStylizeAttributeName,
+                oldtwo ? oldtwo + `${digraphIndex};` : `;${digraphIndex};`
+              );
+            }
+          }
+          //
+        }
+      }
+
+      // dotgraphBackRenderedDoms[i].push(dom.toString());
     }
   }
 };

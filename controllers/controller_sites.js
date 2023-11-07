@@ -118,24 +118,23 @@ const deleteSite = async (req, res) => {
       throw new Error("Invalid or missing id");
     }
 
-    const checkSiteExist = await DB_Model_Sites.findOne({ _id: sanitizedId }, "_id");
-    if (!checkSiteExist) {
-      return res.status(404).json({ msg: `No scraped site with id: ${sanitizedId}` });
-    }
-
     // If I am given a savedanalysisid query then, I only delete the saved analysis and not the scraped site or the other analyses
+    // I use both the site's id in addition to the savedanalysisid which should be enough as a filter, just to make sure there is no discrepancy between the savedanalysisid (sanitizedSavedAnalysisId) and the scraped site's id (sanitizedId) that it corresponds to and also to make sure that the site's id exists
     if (sanitizedSavedAnalysisId) {
-      const analysis = await DB_Model_Analysis.findOneAndDelete({ _id: sanitizedSavedAnalysisId });
+      const analysis = await DB_Model_Analysis.findOneAndDelete({
+        _id: sanitizedSavedAnalysisId,
+        datasetSiteId: sanitizedId,
+      });
       if (analysis) {
-        return res.status(200).json({ msg: "Analysis deleted" });
+        return res.status(200).json({ msg: "Analysis deleted successfully" });
       }
-      return res.status(404).json({ msg: `No analysis with id: ${sanitizedSavedAnalysisId}` });
+      return res.status(404).json({ msg: "No saved analysis with specified parameters" });
     }
 
     const site = await DB_Model_Sites.findOneAndDelete({ _id: sanitizedId });
 
     const analyses = await DB_Model_Analysis.deleteMany({ datasetSiteId: sanitizedId });
-    return res.status(200).json({ msg: "Site and analyses deleted" });
+    return res.status(200).json({ msg: "Site and analyses deleted successfully" });
   } catch (error) {
     return res.status(500).json({ msg: error.message });
   }
