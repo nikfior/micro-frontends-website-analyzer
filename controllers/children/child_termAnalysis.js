@@ -251,9 +251,7 @@ const childTermAnalysis = async (
     const newAnalysis = await DB_Model_Analysis.findOneAndUpdate(
       { _id: sanitizedSavedAnalysisId },
       {
-        status: `Completed analyzing Ok. With minimum kmeans subdir support=${Math.min(
-          ...gspanOutKmeans.support // TODOTODOTODO
-        )}. Also UpperSubdirNum=${sanitizedUpperSubdirNum}, noOfMicrofrontends=${sanitizedNoOfMicrofrontends}; PythonUpperNodeLimit=${sanitizedPythonUpperNodeLimit}, PythonLowerNodeLimit=${sanitizedPythonLowerNodeLimit} and PythonSupport=${sanitizedPythonSupport}`,
+        status: `Completed analyzing Ok.`, // With minimum kmeans subdir support=${Math.min(...gspanOutKmeans.support)}. Also UpperSubdirNum=${sanitizedUpperSubdirNum}, noOfMicrofrontends=${sanitizedNoOfMicrofrontends}; PythonUpperNodeLimit=${sanitizedPythonUpperNodeLimit}, PythonLowerNodeLimit=${sanitizedPythonLowerNodeLimit} and PythonSupport=${sanitizedPythonSupport}`,
         parameters: {
           // sanitizedUpperNodeLimit,
           sanitizedUpperSubdirNum,
