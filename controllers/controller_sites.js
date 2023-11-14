@@ -58,12 +58,22 @@ const createSite = async (req, res) => {
     // test for url validity
     const html = await axios.get(sanitizedUrl);
 
-    const childProcess = fork("./controllers/children/child_createSite");
-    childProcess.send({ url: sanitizedUrl, useHeadlessBrowser: sanitizedSlowCrawl });
+    const newScrapedSite = await DB_Model_Sites.create({
+      url: sanitizedUrl,
+      status: "Scraping... since " + new Date(),
+      html: null,
+      subdirsname: null,
+      creationDate: null,
+    });
 
-    return res
-      .status(201)
-      .json({ msg: "The site is being scraped. The new listing will be shown in the menu when ready" });
+    const childProcess = fork("./controllers/children/child_createSite");
+    childProcess.send({
+      siteId: newScrapedSite.id,
+      url: sanitizedUrl,
+      useHeadlessBrowser: sanitizedSlowCrawl,
+    });
+
+    return res.status(201).json({ msg: "The site is being scraped." });
   } catch (error) {
     if (error.response) {
       return res.status(400).json({

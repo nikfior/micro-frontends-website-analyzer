@@ -7,12 +7,12 @@ const puppeteer = require("puppeteer");
 // ----
 
 process.on("message", (message) => {
-  childCreateSite(message.url, message.useHeadlessBrowser);
+  childCreateSite(message.siteId, message.url, message.useHeadlessBrowser);
 });
 
 // ----
 
-const childCreateSite = async (url, useHeadlessBrowser) => {
+const childCreateSite = async (siteId, url, useHeadlessBrowser) => {
   try {
     await connectDB(process.env.MONGO_DB_URI);
 
@@ -74,25 +74,33 @@ const childCreateSite = async (url, useHeadlessBrowser) => {
       );
     }
 
-    const site = await DB_Model_Sites.create({
-      url: url,
-      status: "Completed scraping Ok",
-      html: subDirs,
-      subdirsname: subdirsName,
-      creationDate: new Date(),
-    });
+    const site = await DB_Model_Sites.findOneAndUpdate(
+      { _id: siteId },
+      {
+        url: url,
+        status: "Completed scraping Ok",
+        html: subDirs,
+        subdirsname: subdirsName,
+        creationDate: new Date(),
+      },
+      { new: true }
+    );
 
     process.exit();
   } catch (error) {
     try {
-      const site = await DB_Model_Sites.create({
-        url: url,
-        status: "Error scraping: " + error.message,
-        html: [],
-        subdirsname: [],
-        creationDate: new Date(),
-      });
-    } catch {
+      const site = await DB_Model_Sites.findOneAndUpdate(
+        { _id: siteId },
+        {
+          url: url,
+          status: "Error scraping: " + error.message,
+          html: [],
+          subdirsname: [],
+          creationDate: new Date(),
+        },
+        { new: true }
+      );
+    } catch (error) {
       console.log("Error saving the error in status: " + error.message);
       process.exit();
     }

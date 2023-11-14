@@ -293,13 +293,13 @@ const childTermAnalysis = async (
   } catch (error) {
     try {
       const newAnalysis = await DB_Model_Analysis.findOneAndUpdate(
-        { datasetSiteId: sanitizedId },
+        { _id: sanitizedSavedAnalysisId },
         {
           status: "Error analyzing: " + error.message,
           analysis: null,
           analysisDate: new Date(),
         },
-        { new: true, upsert: true }
+        { new: true } // , upsert: true }
       );
     } catch (error) {
       console.log("error saving the error in status: " + error.message);

@@ -100,7 +100,7 @@ const getTermAnalysis = async (req, res) => {
       sanitizedNoOfMicrofrontends,
     });
 
-    return res.json(newdAnalysis);
+    return res.status(201).json(newdAnalysis);
   } catch (error) {
     // console.log(error);
     return res.status(500).json({ msg: error.message });
