@@ -237,8 +237,13 @@ const childTermAnalysis = async (
 
     // adds the stylizing info for the frequent dotGraphs trees' leaves and for the html elements that correspond to those dotgraph trees' leaves
     addStylesForDotGraphsInDoms(dotgraphTreesKmeans, domFromAllSubdirs, "Kmeans", paletteKmeans);
-    addStylesForDotGraphsInDoms(dotgraphTreesKmeans, domFromAllSubdirs, "SingleLink", paletteSingleLink);
-    addStylesForDotGraphsInDoms(dotgraphTreesKmeans, domFromAllSubdirs, "CompleteLink", paletteCompleteLink);
+    addStylesForDotGraphsInDoms(dotgraphTreesSingleLink, domFromAllSubdirs, "SingleLink", paletteSingleLink);
+    addStylesForDotGraphsInDoms(
+      dotgraphTreesCompleteLink,
+      domFromAllSubdirs,
+      "CompleteLink",
+      paletteCompleteLink
+    );
 
     // make terms of nodesDirArr from array to bow
     convertNodesDirArrTermsToBow(nodesDirArr);
@@ -1740,9 +1745,9 @@ const stylizeDomElementsByClusterLabel = (
   maxAllresSingleLink,
   maxAllresCompleteLink
 ) => {
-  paletteKmeans = distinctColors({ count: maxAllresKmeans.k });
-  paletteSingleLink = distinctColors({ count: maxAllresSingleLink.k });
-  paletteCompleteLink = distinctColors({ count: maxAllresCompleteLink.k });
+  paletteKmeans = distinctColors({ count: maxAllresKmeans.k, quality: 200, samples: 2000 });
+  paletteSingleLink = distinctColors({ count: maxAllresSingleLink.k, quality: 200, samples: 2000 });
+  paletteCompleteLink = distinctColors({ count: maxAllresCompleteLink.k, quality: 200, samples: 2000 });
 
   for (let dom of domFromAllSubdirs) {
     const nodes = dom.querySelectorAll("[customId]");

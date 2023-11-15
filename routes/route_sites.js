@@ -51,13 +51,13 @@ router.get("/getMenu", sessionCheck, getMenu);
  *       - name: uppersubdirnum
  *         in: query
  *         description: maximum number of subdirectories to be analyzed
- *       - name: noOfMicrofrontends
+ *       - name: noofmicrofrontends
  *         in: query
  *         description: sets the maximum number of microfrontends to search for
- *       - name: useEmbeddedFrequentTreeMining
+ *       - name: useembeddedfrequenttreemining
  *         in: query
  *         description: if set to true, it uses the embedded frequent tree mining merging algorithm. (Use only if the site is to big and there is not enough memory to analyze it normally)
- *       - name: aggressiveTrimming
+ *       - name: aggressivetrimming
  *         in: query
  *         description: aggressively trims the frequent trees. (Use only if the site is to big and there is not enough memory to analyze it normally)
  *       - name: pythonlowernodelimit
