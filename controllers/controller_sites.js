@@ -143,6 +143,10 @@ const deleteSite = async (req, res) => {
 
     const site = await DB_Model_Sites.findOneAndDelete({ _id: sanitizedId });
 
+    if (!site) {
+      return res.status(404).json({ msg: "No saved site with specified id" });
+    }
+
     const analyses = await DB_Model_Analysis.deleteMany({ datasetSiteId: sanitizedId });
     return res.status(200).json({ msg: "Site and analyses deleted successfully" });
   } catch (error) {

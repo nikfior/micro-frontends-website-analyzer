@@ -75,8 +75,10 @@ router.get("/getMenu", sessionCheck, getMenu);
  *     responses:
  *       200:
  *         description: Return info about analysis successfully
+ *       201:
+ *         description: Return info about analysis, that is currently being created, successfully
  *       404:
- *         description: Site with given id not found
+ *         description: Site or saved analysis with given parameters not found
  *       500:
  *         description: Error occured
  */
@@ -105,7 +107,7 @@ router.get("/:id", sessionCheck, getSite);
  *                 description: the slowcrawl uses a headless browser to crawl the site, executing the javascript code as well.
  *     responses:
  *       201:
- *         description: Return info about site successfully
+ *         description: Return info about site, that is currently being scraped, successfully
  *       400:
  *         description: Possible user error. Possibly wrong url
  *       500:
@@ -130,9 +132,9 @@ router.patch("/:id", sessionCheck, updateSite);
  *         required: false
  *     responses:
  *       200:
- *         description: Site and analysis deleted successfully
+ *         description: Site and/or analysis/es deleted successfully
  *       404:
- *         description: Not site with given id found
+ *         description: Not site or analysis/es with given parameters found
  *       500:
  *         description: Error occured
  */

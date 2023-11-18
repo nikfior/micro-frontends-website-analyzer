@@ -53,7 +53,7 @@ const getTermAnalysis = async (req, res) => {
     if (dbAnalysis) {
       // if the forcereanalyze query is not set to true, then I just return the saved analysis which corresponds to that savedanalysisid
       if (req.query.forcereanalyze?.toString().toLowerCase() !== "true") {
-        return res.json(dbAnalysis);
+        return res.status(200).json(dbAnalysis);
       }
 
       // if the forcereanalyze query is set to true, I then reanalyze it and overwrite the previous analysis that corresponds to that savedanalysisid

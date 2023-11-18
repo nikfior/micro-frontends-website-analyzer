@@ -45,12 +45,12 @@ const githubLoginCallback = async (req, res) => {
     const frontendRedirectCallback = req.signedCookies.frontendRedirectCallback;
     res.clearCookie("frontendRedirectCallback");
 
-    // For keeping Frontend session
     const jwttoken = jwt.sign({ id: userDB.id }, process.env.COOKIE_JWT_SECRET);
 
-    // For keeping API session
+    // For keeping API session (backend)
     res.cookie("jwttoken", jwttoken, { signed: true, maxAge: 1000 * 60 * 60 * 24 * 30 });
 
+    // For keeping frontend session. I send the jwt to the front end for the session in two ways. Through a custom header and as a query in the callback url
     if (frontendRedirectCallback) {
       res.set("Custom-Authorization", jwttoken); // ---------------
       return res.redirect(`${frontendRedirectCallback}?jwttoken=${jwttoken}`);
