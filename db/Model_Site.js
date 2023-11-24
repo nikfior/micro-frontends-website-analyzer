@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { array } = require("wink-nlp/src/as");
 
 const TaskSchema = new mongoose.Schema({
   url: {
@@ -17,6 +18,11 @@ const TaskSchema = new mongoose.Schema({
   },
   html: {
     type: Array,
+  },
+  problemsDuringScraping: {
+    type: Array,
+    // I use the undefined default because otherwise it always creates an empty array
+    default: undefined,
   },
 });
 

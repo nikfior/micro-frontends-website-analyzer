@@ -73,7 +73,7 @@ const createSite = async (req, res) => {
       useHeadlessBrowser: sanitizedSlowCrawl,
     });
 
-    return res.status(201).json({ msg: "The site is being scraped." });
+    return res.status(201).json(newScrapedSite);
   } catch (error) {
     if (error.response) {
       return res.status(400).json({
@@ -113,9 +113,9 @@ const updateSite = async (req, res) => {
     if (!site) {
       return res.status(404).json({ msg: `No site with id: ${sanitizedId}` });
     }
-    res.status(200).json({ site });
+    return res.status(200).json({ site });
   } catch (error) {
-    res.status(500).json({ msg: error.message });
+    return res.status(500).json({ msg: error.message });
   }
 };
 

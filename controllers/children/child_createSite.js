@@ -33,7 +33,7 @@ const childCreateSite = async (siteId, url, useHeadlessBrowser) => {
     }
 
     // html.request.res.responseUrl is the actual url after the redirects
-    let [subdirsName, subDirs] = await crawler(
+    let [subdirsName, subDirs, problemsDuringScraping] = await crawler(
       html.data,
       html.request?.res.responseUrl || html.url,
       useHeadlessBrowser,
@@ -59,6 +59,9 @@ const childCreateSite = async (siteId, url, useHeadlessBrowser) => {
     }
 
     // if size of HTML array is too big then remove some subdirectories.
+    if (JSON.stringify(subDirs).length > 17000000) {
+      problemsDuringScraping.push("Some subdirectories where removed due to size limitations");
+    }
     while (JSON.stringify(subDirs).length > 17000000) {
       if (subDirs.length > 1) {
         subdirsName.pop();
@@ -74,14 +77,21 @@ const childCreateSite = async (siteId, url, useHeadlessBrowser) => {
       );
     }
 
+    // remove duplicate errors
+    problemsDuringScraping = [...new Set(problemsDuringScraping)];
+
     const site = await DB_Model_Sites.findOneAndUpdate(
       { _id: siteId },
       {
         url: url,
-        status: "Completed scraping Ok",
+        status:
+          problemsDuringScraping.length === 0
+            ? "Completed scraping Ok"
+            : "Completed scraping with error when scraping",
         html: subDirs,
         subdirsname: subdirsName,
         creationDate: new Date(),
+        problemsDuringScraping: problemsDuringScraping.length === 0 ? undefined : problemsDuringScraping,
       },
       { new: true }
     );
@@ -112,8 +122,9 @@ const childCreateSite = async (siteId, url, useHeadlessBrowser) => {
 // ------
 
 const crawler = async (htmlData, url, useHeadlessBrowser, browser, page) => {
+  let problemsDuringScraping = [];
   const dom = parse(htmlData);
-  if (!dom.getElementsByTagName("body")) {
+  if (!dom.getElementsByTagName("body")[0]) {
     throw new Error("Possible malformed HTML. Cannot parse HTML code correctly.");
   }
   const subdirs = dom.querySelectorAll("a");
@@ -143,7 +154,8 @@ const crawler = async (htmlData, url, useHeadlessBrowser, browser, page) => {
         html.data = await page.content();
         html.url = page.url();
       }
-      // if it already exists then skip it. I check it again because some subdirectories redirect to other ones that I might already have saved
+      // if it already exists then skip it.
+      // I don't use the subdirname for the url because some subdirectories redirect to other ones and the returned response shows the actual redirected url
       if (subdirsName.includes(html.request?.res.responseUrl || html.url)) {
         continue;
       }
@@ -162,6 +174,7 @@ const crawler = async (htmlData, url, useHeadlessBrowser, browser, page) => {
       // if there is an error with the request/response then just continue on with the rest of the subdirectories
       // otherwise if it's an error with the program then return with what is already done
       // if (error.message != "Cannot read property 'replace' of null" || !(error instanceof TypeError)) {
+      problemsDuringScraping.push(error.message);
       if (!error.request && !error.response) {
         // const site = await DB_Model_Sites.create({
         //   url: url,
@@ -172,12 +185,12 @@ const crawler = async (htmlData, url, useHeadlessBrowser, browser, page) => {
         // });
 
         console.log(error.message);
-        return [subdirsName, subdirHTMLArr];
+        return [subdirsName, subdirHTMLArr, problemsDuringScraping];
         // throw error;
       }
     }
     //
   }
 
-  return [subdirsName, subdirHTMLArr];
+  return [subdirsName, subdirHTMLArr, problemsDuringScraping];
 };
