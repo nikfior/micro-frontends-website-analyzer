@@ -66,6 +66,25 @@ const childTermAnalysis = async (
       );
     }
 
+    // ---------------------------------------------------------------------------
+    // Explanation of parameters
+    // sanitizedUpperSubdirNum: specifies the max number of subdirectories that will be analyzed. Default is 15
+    //
+    // sanitizedPythonSupport: Max number of support used as parameter for the python gspan algorithm. Default is sanitizedUpperSubdirNum.
+    //
+    // sanitizedLowerNodeLimit: Only used to trim smaller trees in the keepLargestTreesCleanUp when I have enabled the sanitizedUseEmbeddedFrequentTreeMining and do my merging. Basically it sets a minimum node limit below which the trees are trimmed. Default is sanitizedPythonLowerNodeLimit.
+    //
+    // sanitizedPythonUpperNodeLimit: Parameter used for the python gspan algorithm that specifies the max number of vertices. Default is 9999 or sanitizedPythonLowerNodeLimit if sanitizedPythonUpperNodeLimit < sanitizedPythonLowerNodeLimit.
+    //
+    // sanitizedPythonLowerNodeLimit: Parameter used for the python gspan algorithm that specifies the min number of vertices. Default is 3.
+    //
+    // sanitizedAggressiveTrimming: It discards all trees found from gspan frequent tree mining and keeps only the ones with the largest number of nodes. (Use only if the site has many elements and the uses excessive ammount of memory for your computer).
+    //
+    // sanitizedUseEmbeddedFrequentTreeMining: use the embeded merging of smaller frequent trees.
+    //
+    // sanitizedNoOfMicrofrontends: Specifies the max number of microfrontends that we will search for. Basically specifies the max number of clusters that we will use for the clustering algorithms.
+    // ---------------------------------------------------------------------------
+
     sanitizedUpperSubdirNum = sanitizedUpperSubdirNum || "15";
     sanitizedPythonLowerNodeLimit = sanitizedPythonLowerNodeLimit || "3";
     sanitizedPythonUpperNodeLimit = sanitizedPythonUpperNodeLimit || "9999";
@@ -83,6 +102,8 @@ const childTermAnalysis = async (
       sanitizedUpperSubdirNum > site.subdirsname.length ? site.subdirsname.length : sanitizedUpperSubdirNum;
 
     sanitizedPythonSupport = sanitizedPythonSupport || sanitizedUpperSubdirNum;
+
+    sanitizedNoOfMicrofrontends ??= null;
 
     let nodesDirArr = []; // each index is a site directory
     // each subdirectory of the site is passed in extractTerms to get back the terms. I am also passing the index of the subdirectory so that I can use it as part of the Id of each node
@@ -154,7 +175,7 @@ const childTermAnalysis = async (
     const { gspanFormatKmeans, gspanFormatSingleLink, gspanFormatCompleteLink } =
       convertToGspanFormatAndModifyDom(
         domFromAllSubdirs,
-        sanitizedId,
+        sanitizedSavedAnalysisId,
         maxAllresKmeans,
         maxAllresSingleLink,
         maxAllresCompleteLink,
@@ -171,21 +192,21 @@ const childTermAnalysis = async (
 
     console.log("Before pythonGspan");
     const gspanOutKmeans = pythonGspan(
-      sanitizedId,
+      sanitizedSavedAnalysisId,
       sanitizedPythonUpperNodeLimit,
       sanitizedPythonLowerNodeLimit,
       sanitizedPythonSupport,
       "gspanInKmeans.txt"
     );
     const gspanOutSingleLink = pythonGspan(
-      sanitizedId,
+      sanitizedSavedAnalysisId,
       sanitizedPythonUpperNodeLimit,
       sanitizedPythonLowerNodeLimit,
       sanitizedPythonSupport,
       "gspanInSingleLink.txt"
     );
     const gspanOutCompleteLink = pythonGspan(
-      sanitizedId,
+      sanitizedSavedAnalysisId,
       sanitizedPythonUpperNodeLimit,
       sanitizedPythonLowerNodeLimit,
       sanitizedPythonSupport,
@@ -259,12 +280,14 @@ const childTermAnalysis = async (
         status: `Completed analyzing Ok.`, // With minimum kmeans subdir support=${Math.min(...gspanOutKmeans.support)}. Also UpperSubdirNum=${sanitizedUpperSubdirNum}, noOfMicrofrontends=${sanitizedNoOfMicrofrontends}; PythonUpperNodeLimit=${sanitizedPythonUpperNodeLimit}, PythonLowerNodeLimit=${sanitizedPythonLowerNodeLimit} and PythonSupport=${sanitizedPythonSupport}`,
         parameters: {
           // sanitizedUpperNodeLimit,
-          sanitizedUpperSubdirNum,
-          sanitizedPythonSupport,
-          sanitizedLowerNodeLimit,
-          sanitizedPythonUpperNodeLimit,
-          sanitizedPythonLowerNodeLimit,
-          sanitizedNoOfMicrofrontends, // TODO what to export when left blank
+          upperSubdirNum: sanitizedUpperSubdirNum,
+          pythonSupport: sanitizedPythonSupport,
+          lowerNodeLimit: sanitizedLowerNodeLimit,
+          pythonUpperNodeLimit: sanitizedPythonUpperNodeLimit,
+          pythonLowerNodeLimit: sanitizedPythonLowerNodeLimit,
+          noOfMicrofrontends: sanitizedNoOfMicrofrontends,
+          aggressiveTrimming: useAggressiveTrimming,
+          useEmbeddedFrequentTreeMining: sanitizedUseEmbeddedFrequentTreeMining,
         },
         analysis: {
           dotgraphTreesKmeans,
@@ -1117,7 +1140,7 @@ const gspanOutToDotGraph = (
 // ----
 
 const pythonGspan = (
-  sanitizedId,
+  sanitizedSavedAnalysisId,
   sanitizedPythonUpperNodeLimit,
   sanitizedPythonLowerNodeLimit,
   sanitizedPythonSupport,
@@ -1139,7 +1162,7 @@ const pythonGspan = (
       "True",
       "-d",
       "True",
-      sanitizedId + fileNameEnding,
+      sanitizedSavedAnalysisId + fileNameEnding,
     ];
 
     pyProg = spawnSync("pypy", pyArgs, { maxBuffer: Infinity });
@@ -1150,7 +1173,7 @@ const pythonGspan = (
   }
 
   // remove file for gspan after finishing
-  unlinkSync(sanitizedId + fileNameEnding);
+  unlinkSync(sanitizedSavedAnalysisId + fileNameEnding);
 
   if (pyProg.error) {
     console.log("python error: ", pyProg.error);
@@ -1216,7 +1239,7 @@ const pythonGspan = (
 
 const convertToGspanFormatAndModifyDom = (
   domFromAllSubdirs,
-  sanitizedId,
+  sanitizedSavedAnalysisId,
   maxAllresKmeans,
   maxAllresSingleLink,
   maxAllresCompleteLink,
@@ -1313,9 +1336,15 @@ const convertToGspanFormatAndModifyDom = (
   gspanFormatKmeans[i - 1].push("t # -1");
   gspanFormatSingleLink[i - 1].push("t # -1");
   gspanFormatCompleteLink[i - 1].push("t # -1");
-  writeFileSync(sanitizedId + "gspanInKmeans.txt", gspanFormatKmeans.flat(10).join("\n"));
-  writeFileSync(sanitizedId + "gspanInSingleLink.txt", gspanFormatSingleLink.flat(10).join("\n"));
-  writeFileSync(sanitizedId + "gspanInCompleteLink.txt", gspanFormatCompleteLink.flat(10).join("\n"));
+  writeFileSync(sanitizedSavedAnalysisId + "gspanInKmeans.txt", gspanFormatKmeans.flat(10).join("\n"));
+  writeFileSync(
+    sanitizedSavedAnalysisId + "gspanInSingleLink.txt",
+    gspanFormatSingleLink.flat(10).join("\n")
+  );
+  writeFileSync(
+    sanitizedSavedAnalysisId + "gspanInCompleteLink.txt",
+    gspanFormatCompleteLink.flat(10).join("\n")
+  );
   return { gspanFormatKmeans, gspanFormatSingleLink, gspanFormatCompleteLink };
 };
 
