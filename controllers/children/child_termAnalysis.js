@@ -85,9 +85,9 @@ const childTermAnalysis = async (
     // sanitizedNoOfMicrofrontends: Specifies the max number of microfrontends that we will search for. Basically specifies the max number of clusters that we will use for the clustering algorithms.
     // ---------------------------------------------------------------------------
 
-    sanitizedUpperSubdirNum = sanitizedUpperSubdirNum || "15";
-    sanitizedPythonLowerNodeLimit = sanitizedPythonLowerNodeLimit || "3";
-    sanitizedPythonUpperNodeLimit = sanitizedPythonUpperNodeLimit || "9999";
+    sanitizedUpperSubdirNum = parseInt(sanitizedUpperSubdirNum) || 15;
+    sanitizedPythonLowerNodeLimit = parseInt(sanitizedPythonLowerNodeLimit) || 3;
+    sanitizedPythonUpperNodeLimit = parseInt(sanitizedPythonUpperNodeLimit) || 9999;
     // if upper limit is lower than lower limit then set upper limit = lower limit
     sanitizedPythonUpperNodeLimit =
       sanitizedPythonUpperNodeLimit < sanitizedPythonLowerNodeLimit
@@ -101,9 +101,9 @@ const childTermAnalysis = async (
     sanitizedUpperSubdirNum =
       sanitizedUpperSubdirNum > site.subdirsname.length ? site.subdirsname.length : sanitizedUpperSubdirNum;
 
-    sanitizedPythonSupport = sanitizedPythonSupport || sanitizedUpperSubdirNum;
+    sanitizedPythonSupport = parseInt(sanitizedPythonSupport) || sanitizedUpperSubdirNum;
 
-    sanitizedNoOfMicrofrontends ??= null;
+    sanitizedNoOfMicrofrontends = parseInt(sanitizedNoOfMicrofrontends) || null;
 
     let nodesDirArr = []; // each index is a site directory
     // each subdirectory of the site is passed in extractTerms to get back the terms. I am also passing the index of the subdirectory so that I can use it as part of the Id of each node

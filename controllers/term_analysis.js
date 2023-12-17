@@ -75,6 +75,7 @@ const getTermAnalysis = async (req, res) => {
     else {
       newdAnalysis = await DB_Model_Analysis.create({
         datasetSiteId: sanitizedId,
+        url: site.url,
         status: "Analyzing... since " + new Date(),
         analysis: null,
         parameters: null,

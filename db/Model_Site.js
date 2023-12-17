@@ -21,8 +21,8 @@ const TaskSchema = new mongoose.Schema({
   },
   problemsDuringScraping: {
     type: Array,
-    // I use the undefined default because otherwise it always creates an empty array
-    default: undefined,
+    // I could use undefined as default in order to not create an empty array when not problem is found
+    // default: undefined,
   },
 });
 

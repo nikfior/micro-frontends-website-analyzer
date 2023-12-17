@@ -61,8 +61,8 @@ const createSite = async (req, res) => {
     const newScrapedSite = await DB_Model_Sites.create({
       url: sanitizedUrl,
       status: "Scraping... since " + new Date(),
-      html: null,
-      subdirsname: null,
+      html: [],
+      subdirsname: [],
       creationDate: null,
     });
 
