@@ -10,6 +10,11 @@ process.on("message", (message) => {
   childCreateSite(message.siteId, message.url, message.useHeadlessBrowser);
 });
 
+function wait(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
 // ----
 
 const childCreateSite = async (siteId, url, useHeadlessBrowser) => {
@@ -77,8 +82,8 @@ const childCreateSite = async (siteId, url, useHeadlessBrowser) => {
       );
     }
 
-    // remove duplicate errors
-    problemsDuringScraping = [...new Set(problemsDuringScraping)];
+    // // remove duplicate errors
+    // problemsDuringScraping = [...new Set(problemsDuringScraping)];
 
     const site = await DB_Model_Sites.findOneAndUpdate(
       { _id: siteId },
@@ -148,6 +153,9 @@ const crawler = async (htmlData, url, useHeadlessBrowser, browser, page) => {
       let html = {};
       if (!useHeadlessBrowser) {
         html = await axios.get(subdirname);
+
+        // maybe add the below wait because some site return an axios 429 error for too many requests
+        // await wait(400);
       } else {
         await page.goto(subdirname, { waitUntil: "networkidle0" });
         // await page.setViewport({ width: 1080, height: 1024 });
