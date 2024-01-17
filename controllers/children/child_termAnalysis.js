@@ -102,6 +102,9 @@ const childTermAnalysis = async (
       sanitizedUpperSubdirNum > site.subdirsname.length ? site.subdirsname.length : sanitizedUpperSubdirNum;
 
     sanitizedPythonSupport = parseInt(sanitizedPythonSupport) || sanitizedUpperSubdirNum;
+    if (sanitizedPythonSupport < 2) {
+      throw new Error("pythonsupport cannot be less than 2");
+    }
 
     sanitizedNoOfMicrofrontends = parseInt(sanitizedNoOfMicrofrontends) || null;
 
@@ -1569,6 +1572,8 @@ const getHierarchicalNodexNode = (nodesDirArr, sanitizedNoOfMicrofrontends) => {
   upperLimit = sanitizedNoOfMicrofrontends || upperLimit;
 
   for (let c = 2; c <= upperLimit; c++) {
+    console.log("in hierarchical at c= " + c);
+
     // hierarchical clustering-----
     const singleLinkLevels = hierarchicalCluster({
       input: nodexnode,
