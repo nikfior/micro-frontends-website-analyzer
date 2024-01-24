@@ -193,7 +193,7 @@ const childTermAnalysis = async (
       maxAllresCompleteLink
     );
 
-    console.log("Before pythonGspan");
+    console.log("Before pythonGspan kmeans");
     const gspanOutKmeans = pythonGspan(
       sanitizedSavedAnalysisId,
       sanitizedPythonUpperNodeLimit,
@@ -201,6 +201,7 @@ const childTermAnalysis = async (
       sanitizedPythonSupport,
       "gspanInKmeans.txt"
     );
+    console.log("Before pythonGspan singlelink");
     const gspanOutSingleLink = pythonGspan(
       sanitizedSavedAnalysisId,
       sanitizedPythonUpperNodeLimit,
@@ -208,6 +209,7 @@ const childTermAnalysis = async (
       sanitizedPythonSupport,
       "gspanInSingleLink.txt"
     );
+    console.log("Before pythonGspan completelink");
     const gspanOutCompleteLink = pythonGspan(
       sanitizedSavedAnalysisId,
       sanitizedPythonUpperNodeLimit,

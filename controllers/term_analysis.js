@@ -4,26 +4,32 @@ const { fork } = require("child_process");
 
 const getTermAnalysis = async (req, res) => {
   try {
+    // convert queries to lowercase
+    const queriesNorm = {};
+    for (const i in req.query) {
+      queriesNorm[i.toLowerCase()] = req.query[i];
+    }
+
     // check and verify correct inputs
 
     // sanitizedId (id) is the id that corresponds to the scraped site. Basically, the datasetSiteId.
     // sanitizedSavedAnalysisId (savedanalysisid) is the id that corresponds to a saved analysis of a scraped site. Basically, it's the _id of the database that saves the analyses.
-    const sanitizedId = req.query.id?.toString().match(/^[0-9a-f]*$/i)?.[0];
-    // alternative sanitization // const sanitizedId = req.query.id?.toString().replace(/\$/g, "");
-    const sanitizedSavedAnalysisId = req.query.savedanalysisid?.toString().match(/^[0-9a-f]*$/i)?.[0];
+    const sanitizedId = queriesNorm.id?.toString().match(/^[0-9a-f]*$/i)?.[0];
+    // alternative sanitization // const sanitizedId = queriesNorm.id?.toString().replace(/\$/g, "");
+    const sanitizedSavedAnalysisId = queriesNorm.savedanalysisid?.toString().match(/^[0-9a-f]*$/i)?.[0];
     if (!sanitizedId) {
       throw new Error("Invalid site id");
     }
-    let sanitizedUpperNodeLimit = req.query.uppernodelimit?.toString().match(/^[0-9]*$/)?.[0];
-    let sanitizedUpperSubdirNum = req.query.uppersubdirnum?.toString().match(/^[0-9]*$/)?.[0];
-    let sanitizedPythonSupport = req.query.pythonsupport?.toString().match(/^[0-9]*$/)?.[0];
-    let sanitizedLowerNodeLimit = req.query.lowernodelimit?.toString().match(/^[0-9]*$/)?.[0];
-    let sanitizedPythonUpperNodeLimit = req.query.pythonuppernodelimit?.toString().match(/^[0-9]*$/)?.[0];
-    let sanitizedPythonLowerNodeLimit = req.query.pythonlowernodelimit?.toString().match(/^[0-9]*$/)?.[0];
-    const sanitizedAggressiveTrimming = req.query.aggressivetrimming?.toString().toLowerCase() === "true";
+    let sanitizedUpperNodeLimit = queriesNorm.uppernodelimit?.toString().match(/^[0-9]*$/)?.[0];
+    let sanitizedUpperSubdirNum = queriesNorm.uppersubdirnum?.toString().match(/^[0-9]*$/)?.[0];
+    let sanitizedPythonSupport = queriesNorm.pythonsupport?.toString().match(/^[0-9]*$/)?.[0];
+    let sanitizedLowerNodeLimit = queriesNorm.lowernodelimit?.toString().match(/^[0-9]*$/)?.[0];
+    let sanitizedPythonUpperNodeLimit = queriesNorm.pythonuppernodelimit?.toString().match(/^[0-9]*$/)?.[0];
+    let sanitizedPythonLowerNodeLimit = queriesNorm.pythonlowernodelimit?.toString().match(/^[0-9]*$/)?.[0];
+    const sanitizedAggressiveTrimming = queriesNorm.aggressivetrimming?.toString().toLowerCase() === "true";
     const sanitizedUseEmbeddedFrequentTreeMining =
-      req.query.useembeddedfrequenttreemining?.toString().toLowerCase() === "true";
-    const sanitizedNoOfMicrofrontends = req.query.noofmicrofrontends?.toString().match(/^[0-9]*$/)?.[0];
+      queriesNorm.useembeddedfrequenttreemining?.toString().toLowerCase() === "true";
+    const sanitizedNoOfMicrofrontends = queriesNorm.noofmicrofrontends?.toString().match(/^[0-9]*$/)?.[0];
 
     //
     //
@@ -52,7 +58,7 @@ const getTermAnalysis = async (req, res) => {
     // I enter here If there is a saved analysis which corresponds to the savedanalysisid
     if (dbAnalysis) {
       // if the forcereanalyze query is not set to true, then I just return the saved analysis which corresponds to that savedanalysisid
-      if (req.query.forcereanalyze?.toString().toLowerCase() !== "true") {
+      if (queriesNorm.forcereanalyze?.toString().toLowerCase() !== "true") {
         return res.status(200).json(dbAnalysis);
       }
 
