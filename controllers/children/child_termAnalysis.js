@@ -1696,31 +1696,44 @@ const extractTerms = async (dom, subdIndex, countId) => {
       .readDoc(node.text)
       .tokens()
       .filter(
-        (t) => t.out(its.type) !== "punctuation" && !t.out(its.stopWordFlag) && t.out(its.pos) !== "PART"
+        (t) =>
+          t.out(its.type) !== "punctuation" &&
+          !t.out(its.stopWordFlag) &&
+          t.out(its.pos) !== "PART" &&
+          t.out(its.pos) !== "SYM"
       );
 
     for (let i = 0; i < tokens.length(); i++) {
       let result = await wordpos.lookup(tokens.itemAt(i).out(its.normal));
       let synonyms = result.map((item) => item.synonyms); // TODO maybe get the pos synonyms only and not for all adj,verb,noun,etc?
+      let lexNames = result.map((item) => item.lexName.substring(item.lexName.indexOf(".") + 1));
+      // // if the word is not found then try the lemma version
+      // if (synonyms.length === 0) {
+      //   result = await wordpos.lookup(tokens.itemAt(i).out(its.lemma));
+      //   synonyms = result.map((item) => item.synonyms); // TODO maybe get the pos synonyms only and not for all adj,verb,noun,etc?
+      // }
 
-      // if the word is not found then try the lemma version
-      if (synonyms.length === 0) {
-        result = await wordpos.lookup(tokens.itemAt(i).out(its.lemma));
-        synonyms = result.map((item) => item.synonyms); // TODO maybe get the pos synonyms only and not for all adj,verb,noun,etc?
-      }
+      nodeTerms = [...nodeTerms, ...synonyms, ...lexNames];
+
+      // also use the lemma version of the word
+      result = await wordpos.lookup(tokens.itemAt(i).out(its.lemma));
+      synonyms = result.map((item) => item.synonyms); // TODO maybe get the pos synonyms only and not for all adj,verb,noun,etc?
+      lexNames = result.map((item) => item.lexName.substring(item.lexName.indexOf(".") + 1));
+
+      nodeTerms = [...nodeTerms, ...synonyms, ...lexNames];
 
       // if the word is not found then try the stem version
       if (synonyms.length === 0) {
         result = await wordpos.lookup(tokens.itemAt(i).out(its.stem));
         synonyms = result.map((item) => item.synonyms); // TODO maybe get the pos synonyms only and not for all adj,verb,noun,etc?
+        lexNames = result.map((item) => item.lexName.substring(item.lexName.indexOf(".") + 1));
+
+        nodeTerms = [...nodeTerms, ...synonyms, ...lexNames];
       }
 
-      // reducing all synonym groups if it's adj, verb, noun, etc
-      synonyms = synonyms.flat(10);
       // // by using new Set(synonyms) I remove the duplicate synonyms of a single word of a text of a node. The node might have duplicate Terms if two words have the same synonym but a single word can't have the same word as a synonym
       // // the reason a single word can have duplicate words as a synonym is because a word can be a verb, noun, adjective and might have the same synonym in those forms
       // nodeTerms = [...nodeTerms, ...new Set(synonyms)];
-      nodeTerms = [...nodeTerms, ...synonyms];
     }
 
     // TODO is it better to remove the nodes that don't have text instead of the nodes that have text but don't have synonyms like I do below? and maybe use the text as the terms
