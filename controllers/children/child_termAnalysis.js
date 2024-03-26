@@ -60,9 +60,9 @@ const childTermAnalysis = async (
 
     const site = await DB_Model_Sites.findById(sanitizedId);
 
-    if (site.subdirsname.length < 2) {
+    if (site.subdirsname.length === 0) {
       throw new Error(
-        `Site has ${site.subdirsname.length} subdirectories. More that 1 subdirectories are needed in order to analyze the site.`
+        "Site has 0 subdirectories. At least 1 subdirectories are needed in order to analyze the site."
       );
     }
 
@@ -102,8 +102,8 @@ const childTermAnalysis = async (
       sanitizedUpperSubdirNum > site.subdirsname.length ? site.subdirsname.length : sanitizedUpperSubdirNum;
 
     sanitizedPythonSupport = parseInt(sanitizedPythonSupport) || sanitizedUpperSubdirNum;
-    if (sanitizedPythonSupport < 2) {
-      throw new Error("pythonsupport cannot be less than 2");
+    if (sanitizedPythonSupport < 1) {
+      throw new Error("pythonsupport cannot be less than 1");
     }
 
     sanitizedNoOfMicrofrontends = parseInt(sanitizedNoOfMicrofrontends) || null;
@@ -275,9 +275,9 @@ const childTermAnalysis = async (
     convertNodesDirArrTermsToBow(nodesDirArr);
 
     // not saving dotOrigins due to its size
-    delete dotgraphTreesKmeans.dotOrigins;
-    delete dotgraphTreesSingleLink.dotOrigins;
-    delete dotgraphTreesCompleteLink.dotOrigins;
+    delete dotgraphTreesKmeans?.dotOrigins;
+    delete dotgraphTreesSingleLink?.dotOrigins;
+    delete dotgraphTreesCompleteLink?.dotOrigins;
 
     const newAnalysis = await DB_Model_Analysis.findOneAndUpdate(
       { _id: sanitizedSavedAnalysisId },
@@ -1180,14 +1180,19 @@ const pythonGspan = (
   // remove file for gspan after finishing
   unlinkSync(sanitizedSavedAnalysisId + fileNameEnding);
 
-  if (pyProg.error) {
+  if (pyProg?.error) {
     console.log("python error: ", pyProg.error);
     return "Error Executing Tree mining";
   }
 
-  if (pyProg.stderr.toString()) {
+  if (pyProg?.stderr.toString()) {
     console.log("stderr: ", pyProg.stderr.toString());
     return "stderror executing tree mining";
+  }
+
+  // if it doesn't start with "t #" or the pyProg doesn't exist it means that it didn't find any graphs (or didn't run at all) so just return an empty object
+  if (!pyProg?.stdout.toString().startsWith("t #")) {
+    return {};
   }
 
   const allGraphs = pyProg.stdout.toString().match(/^(t|v|e).+$/gm);
@@ -1891,6 +1896,12 @@ const convertHierarchicalToLabel = (clusters) => {
 //
 // adds the stylizing info for the frequent dotGraphs trees' leaves and for the html elements that correspond to those dotgraph trees' leaves
 const addStylesForDotGraphsInDoms = (dotgraphTrees, domFromAllSubdirs, clusteringMethod, palette) => {
+  //
+  // if there are no frequent trees found then just return
+  if (!dotgraphTrees) {
+    return;
+  }
+
   const { dotOrigins, dotWhere, dotGraphs } = dotgraphTrees;
   const digraphLabelStylizeAttributeName = "digraphLabelStylize" + clusteringMethod;
 

@@ -76,10 +76,14 @@ const childCreateSite = async (siteId, url, useHeadlessBrowser) => {
       }
     }
 
-    if (subDirs.length < 2) {
+    if (subDirs.length === 0) {
       throw new Error(
-        `Site has ${subDirs.length} subdirectories. More that 1 subdirectories are needed in order to analyze the site.`
+        "Site has 0 subdirectories. At least 1 subdirectories are needed in order to analyze the site."
       );
+    }
+
+    if (subDirs.length === 1) {
+      problemsDuringScraping.push("Site has only 1 subdirectory. Hierarchical analysis will not be possible");
     }
 
     // // remove duplicate errors
@@ -92,7 +96,7 @@ const childCreateSite = async (siteId, url, useHeadlessBrowser) => {
         status:
           problemsDuringScraping.length === 0
             ? "Completed scraping Ok"
-            : "Completed scraping with error when scraping",
+            : "Completed scraping with warning when scraping",
         html: subDirs,
         subdirsname: subdirsName,
         creationDate: new Date(),
