@@ -1264,8 +1264,10 @@ const convertToGspanFormatAndModifyDom = (
   // ----starting functions used to iterate the dom with the breadth package----
   // const getChildren = (node) => node.childNodes;
   const getChildren = (node) => {
-    // TODO change if i also search for titles as well as texts
-    if (!node.text) {
+    // checks if there is text, alt text or title text in the node or its children. I could basically always return the node.childNodes but i left this just in case
+    const hasNodeText = node.text || node.querySelector("[alt]") || node.querySelector("[title]") || "";
+
+    if (!hasNodeText) {
       return [];
     }
     return node.childNodes;
@@ -1273,7 +1275,7 @@ const convertToGspanFormatAndModifyDom = (
 
   const visit = (node) => {
     //
-    // if text node is empty then remove it and not show it in gspan format array
+    // if text node is empty then remove it and not show it in gspan format array. This basically removes all the empty text nodes that exist between the elements that have all the empty spaces and change lines
     if (node.nodeType !== 1) {
       const hasText = /\S/g.test(node.text);
       if (!hasText) {
@@ -1696,16 +1698,24 @@ const extractTerms = async (dom, subdIndex, countId) => {
 
     let nodeTerms = [];
 
+    // check if there is text in the link. If there is then use that. Otherwise check for alt text or title text in a nested element
+    let nodeText = node.text;
+    if (nodeText.trim() === "") {
+      nodeText =
+        node.querySelector("[alt]")?.attributes.alt ?? node.querySelector("[title]")?.attributes.alt ?? "";
+    }
+
     // tokenize the textContent of each node and remove punctuations and stopwords. Also remove Particle pos that are somehow not removed with stopwords
     const tokens = nlp
-      .readDoc(node.text)
+      .readDoc(nodeText)
       .tokens()
       .filter(
         (t) =>
           t.out(its.type) !== "punctuation" &&
           !t.out(its.stopWordFlag) &&
           t.out(its.pos) !== "PART" &&
-          t.out(its.pos) !== "SYM"
+          t.out(its.pos) !== "SYM" &&
+          t.out(its.pos) !== "SPACE"
       );
 
     for (let i = 0; i < tokens.length(); i++) {
@@ -1753,7 +1763,7 @@ const extractTerms = async (dom, subdIndex, countId) => {
       dirNode.push({
         node: node.tagName,
         id: subdIndex + ":" + id + ";" + countId,
-        text: node.textContent,
+        text: nodeText,
         terms: nodeTerms,
       }); // -------------------------change what to save from the node
 
