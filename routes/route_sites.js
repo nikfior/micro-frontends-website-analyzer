@@ -83,6 +83,29 @@ router.get("/getMenu", sessionCheck, getMenu);
  *         description: Error occured
  */
 router.get("/analysis", sessionCheck, getTermAnalysis);
+
+/**
+ * @openapi
+ *   /api/sites/{id}:
+ *   get:
+ *     description: Returns info about site with given id
+ *     parameters:
+ *      -  name: id
+ *         in: path
+ *         description: id of the site whose info will be returned
+ *         required: true
+ *      -  name: htmlomit
+ *         in: query
+ *         description: if set to true then it omits the html data of the site in order to speed up the retrieval of the other info since the html object may be several mb big
+ *         required: false
+ *     responses:
+ *       200:
+ *         description: Return info successfully
+ *       404:
+ *         description: Site with given id not found
+ *       500:
+ *         description: Error occured
+ */
 router.get("/:id", sessionCheck, getSite);
 
 /**

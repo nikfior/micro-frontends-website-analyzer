@@ -91,9 +91,30 @@ const createSite = async (req, res) => {
 const getSite = async (req, res) => {
   try {
     const sanitizedId = req.params.id.toString().replace(/\$/g, "");
-    const site = await DB_Model_Sites.findOne({
-      _id: sanitizedId,
-    });
+
+    // normalize query parameters by making them all lowercase
+    for (const key in req.query) {
+      if ((key.toLowerCase() === key) == false) {
+        req.query[key.toLowerCase()] = req.query[key];
+        delete req.query[key];
+      }
+    }
+    const htmlomit = req.query.htmlomit?.toString().toLowerCase() === "true";
+
+    let site;
+    if (htmlomit) {
+      site = await DB_Model_Sites.findOne(
+        {
+          _id: sanitizedId,
+        },
+        "-html"
+      );
+    } else {
+      site = await DB_Model_Sites.findOne({
+        _id: sanitizedId,
+      });
+    }
+
     if (!site) {
       return res.status(404).json({ msg: `No site with id: ${sanitizedId}` });
     }

@@ -64,10 +64,10 @@ const childCreateSite = async (siteId, url, useHeadlessBrowser) => {
     }
 
     // if size of HTML array is too big then remove some subdirectories.
-    if (JSON.stringify(subDirs).length > 17000000) {
+    if (JSON.stringify(subDirs).length > 16000000) {
       problemsDuringScraping.push("Some subdirectories where removed due to size limitations");
     }
-    while (JSON.stringify(subDirs).length > 17000000) {
+    while (JSON.stringify(subDirs).length > 16000000) {
       if (subDirs.length > 1) {
         subdirsName.pop();
         subDirs.pop();
@@ -141,13 +141,12 @@ const crawler = async (htmlData, url, useHeadlessBrowser, browser, page) => {
   let subdirsName = [url];
   for (let node of subdirs) {
     try {
-      // console.log(node.getAttribute("href"));
-      // TODO also check if it is absolute and starts with the site url ALSO CHECK if it is the same url as before
-      // is it correct to omit urls from other domains?
+      //
+      // if the node has not href attribute or if it has but the origin is different that the sites domain (ie. if it points to an external site), then omit it
+      // TODO is it correct to omit urls from other domains?
       if (
         !node.getAttribute("href") ||
-        (!node.getAttribute("href").startsWith(new URL(url).origin) &&
-          !node.getAttribute("href").startsWith("/"))
+        !new URL(node.getAttribute("href"), url).href.startsWith(new URL(url).origin)
       ) {
         continue;
       }
