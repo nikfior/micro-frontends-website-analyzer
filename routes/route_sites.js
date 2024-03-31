@@ -8,6 +8,7 @@ const {
   getSite,
   updateSite,
   deleteSite,
+  deleteSubs,
 } = require("../controllers/controller_sites");
 
 const { sessionCheck } = require("../middlewares/check_session");
@@ -137,6 +138,9 @@ router.get("/:id", sessionCheck, getSite);
  *         description: Error occured
  */
 router.post("/", sessionCheck, createSite);
+
+router.delete("/deleteSubs", sessionCheck, deleteSubs);
+
 router.patch("/:id", sessionCheck, updateSite);
 
 /**

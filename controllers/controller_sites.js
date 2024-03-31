@@ -175,6 +175,32 @@ const deleteSite = async (req, res) => {
   }
 };
 
+const deleteSubs = async (req, res) => {
+  try {
+    const sanitizedId = req.query.id?.toString().match(/^[0-9a-f]*$/i)?.[0];
+    const sanitizedSubs = req.query.subs?.toString().match(/^[0-9,]*$/i)?.[0];
+
+    const site = await DB_Model_Sites.findById(sanitizedId);
+
+    if (site) {
+      const subsToRemove = sanitizedSubs
+        .split(",")
+        .filter((x) => x)
+        .map((x) => parseInt(x));
+
+      site.subdirsname = site.subdirsname.filter((x, index) => !subsToRemove.includes(index));
+      site.html = site.html.filter((x, index) => !subsToRemove.includes(index));
+
+      await site.save();
+      return res.status(200).json({ msg: "Site subdirectories modified" });
+    } else {
+      return res.status(404).json({ msg: "No saved site with specified id" });
+    }
+  } catch (error) {
+    return res.status(500).json({ msg: error.message });
+  }
+};
+
 module.exports = {
   getAllSites,
   getMenu,
@@ -182,4 +208,5 @@ module.exports = {
   getSite,
   updateSite,
   deleteSite,
+  deleteSubs,
 };
