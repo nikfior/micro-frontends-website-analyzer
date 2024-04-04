@@ -357,6 +357,7 @@ const gspanOutToDotGraph = (
 ) => {
   const minSupport = Math.min(...gspanOut.support);
 
+  // TODO maybe remove the harcoded number and give it from a query parameter
   const numOfDigraphsToKeep = 30;
 
   // let dotGraphsTemp = [];
@@ -1152,6 +1153,7 @@ const pythonGspan = (
   fileNameEnding
 ) => {
   let pyProg;
+  let newGraphOutput;
 
   for (let i = sanitizedPythonSupport; i > 1; i--) {
     const pyArgs = [
@@ -1172,9 +1174,27 @@ const pythonGspan = (
 
     pyProg = spawnSync("pypy", pyArgs, { maxBuffer: Infinity });
 
-    if (pyProg.stdout.toString().startsWith("t #")) {
+    if (pyProg.stdout.slice(0, 3).toString().startsWith("t #")) {
+      //
+      let countFGraphs = 0;
+      let i = 0;
+      for (i = 0; i < pyProg.stdout.length; i++) {
+        if (pyProg.stdout[i] === 116 && pyProg.stdout[i + 1] === 32 && pyProg.stdout[i + 2] === 35) {
+          countFGraphs++;
+          // TODO maybe remove the harcoded number and give it from a query parameter
+          if (countFGraphs > 30) {
+            break;
+          }
+          //
+        }
+        //
+      }
+
+      newGraphOutput = pyProg.stdout.slice(0, i).toString();
       break;
     }
+
+    //
   }
 
   // remove file for gspan after finishing
@@ -1190,18 +1210,15 @@ const pythonGspan = (
     return "stderror executing tree mining";
   }
 
-  // if it doesn't start with "t #" or the pyProg doesn't exist it means that it didn't find any graphs (or didn't run at all) so just return an empty object
-  if (!pyProg?.stdout.toString().startsWith("t #")) {
+  // if it doesn't start with "t #" or the newGraphOutput doesn't exist it means that it didn't find any graphs (or didn't run at all) so just return an empty object
+  if (!newGraphOutput?.startsWith("t #")) {
     return {};
   }
 
-  const allGraphs = pyProg.stdout.toString().match(/^(t|v|e).+$/gm);
-  const where = Array.from(pyProg.stdout.toString().matchAll(/^where: \[(.+)\]$/gm), (x) => x[1].split(", "));
-  const support = pyProg.stdout
-    .toString()
-    .match(/^Support.+$/gm)
-    .map((x) => x.split(" ")[1]);
-  const allOrigins = pyProg.stdout.toString().match(/^(((s:|o:).+)|-----------------)$/gm);
+  const allGraphs = newGraphOutput.match(/^(t|v|e).+$/gm);
+  const where = Array.from(newGraphOutput.matchAll(/^where: \[(.+)\]$/gm), (x) => x[1].split(", "));
+  const support = newGraphOutput.match(/^Support.+$/gm).map((x) => x.split(" ")[1]);
+  const allOrigins = newGraphOutput.match(/^(((s:|o:).+)|-----------------)$/gm);
   allOrigins.pop(); // remove last dashes to make later analyzing easier
 
   // separate allGraphs into separate arrays of graphs. Different index in array for different graph
