@@ -35,14 +35,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/nikfior/web-app-back-end.git"
+    "url": "git+https://github.com/nikfior/micro-frontends-website-analyzer.git"
   },
   "author": "",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/nikfior/web-app-back-end/issues"
+    "url": "https://github.com/nikfior/micro-frontends-website-analyzer/issues"
   },
-  "homepage": "https://github.com/nikfior/web-app-back-end#readme",
+  "homepage": "https://github.com/nikfior/micro-frontends-website-analyzer#readme",
   "devDependencies": {
     "eslint": "^8.5.0",
     "eslint-config-prettier": "^8.3.0",
