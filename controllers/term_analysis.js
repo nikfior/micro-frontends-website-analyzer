@@ -31,6 +31,8 @@ const getTermAnalysis = async (req, res) => {
       queriesNorm.useembeddedfrequenttreemining?.toString().toLowerCase() === "true";
     const sanitizedNoOfMicrofrontends = queriesNorm.noofmicrofrontends?.toString().match(/^[0-9]*$/)?.[0];
 
+    const sanitizedPythonExecutable = queriesNorm.pythonexecutable?.toString().match(/^[0-9a-z]+$/)?.[0];
+
     //
     //
 
@@ -105,6 +107,7 @@ const getTermAnalysis = async (req, res) => {
       sanitizedAggressiveTrimming,
       sanitizedUseEmbeddedFrequentTreeMining,
       sanitizedNoOfMicrofrontends,
+      sanitizedPythonExecutable,
     });
 
     return res.status(201).json(newdAnalysis);

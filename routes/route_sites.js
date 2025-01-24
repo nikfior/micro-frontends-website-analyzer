@@ -73,6 +73,10 @@ router.get("/getMenu", sessionCheck, getMenu);
  *       - name: pythonsupport
  *         in: query
  *         description: sets the maximum support of the frequent trees.
+ *       - name: pythonexecutable
+ *         in: query
+ *         default: python
+ *         description: sets the name of the external program that will run the python script. (If pypy and the required libraries are installed then you should set this to run with the "pypy" executable for better efficiency and faster execution speed.)
  *     responses:
  *       200:
  *         description: Return info about analysis successfully

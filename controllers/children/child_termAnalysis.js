@@ -36,7 +36,8 @@ process.on("message", (message) => {
     message.sanitizedPythonLowerNodeLimit,
     message.sanitizedAggressiveTrimming,
     message.sanitizedUseEmbeddedFrequentTreeMining,
-    message.sanitizedNoOfMicrofrontends
+    message.sanitizedNoOfMicrofrontends,
+    message.sanitizedPythonExecutable
   );
 });
 
@@ -53,7 +54,8 @@ const childTermAnalysis = async (
   sanitizedPythonLowerNodeLimit,
   useAggressiveTrimming,
   sanitizedUseEmbeddedFrequentTreeMining,
-  sanitizedNoOfMicrofrontends
+  sanitizedNoOfMicrofrontends,
+  sanitizedPythonExecutable
 ) => {
   try {
     await connectDB(process.env.MONGO_DB_URI);
@@ -83,6 +85,8 @@ const childTermAnalysis = async (
     // sanitizedUseEmbeddedFrequentTreeMining: use the embeded merging of smaller frequent trees.
     //
     // sanitizedNoOfMicrofrontends: Specifies the max number of microfrontends that we will search for. Basically specifies the max number of clusters that we will use for the clustering algorithms.
+    //
+    // sanitizedPythonExecutable: Used when running the python script in pythonGspan to specify what program will run the python script
     // ---------------------------------------------------------------------------
 
     sanitizedUpperSubdirNum = parseInt(sanitizedUpperSubdirNum) || 15;
@@ -107,6 +111,8 @@ const childTermAnalysis = async (
     }
 
     sanitizedNoOfMicrofrontends = parseInt(sanitizedNoOfMicrofrontends) || null;
+
+    sanitizedPythonExecutable ??= "python";
 
     let nodesDirArr = []; // each index is a site directory
     // each subdirectory of the site is passed in extractTerms to get back the terms. I am also passing the index of the subdirectory so that I can use it as part of the Id of each node
@@ -199,7 +205,8 @@ const childTermAnalysis = async (
       sanitizedPythonUpperNodeLimit,
       sanitizedPythonLowerNodeLimit,
       sanitizedPythonSupport,
-      "gspanInKmeans.txt"
+      "gspanInKmeans.txt",
+      sanitizedPythonExecutable
     );
     console.log("Before pythonGspan singlelink");
     const gspanOutSingleLink = pythonGspan(
@@ -207,7 +214,8 @@ const childTermAnalysis = async (
       sanitizedPythonUpperNodeLimit,
       sanitizedPythonLowerNodeLimit,
       sanitizedPythonSupport,
-      "gspanInSingleLink.txt"
+      "gspanInSingleLink.txt",
+      sanitizedPythonExecutable
     );
     console.log("Before pythonGspan completelink");
     const gspanOutCompleteLink = pythonGspan(
@@ -215,7 +223,8 @@ const childTermAnalysis = async (
       sanitizedPythonUpperNodeLimit,
       sanitizedPythonLowerNodeLimit,
       sanitizedPythonSupport,
-      "gspanInCompleteLink.txt"
+      "gspanInCompleteLink.txt",
+      sanitizedPythonExecutable
     );
 
     // const { readFileSync } = require("fs");
@@ -293,6 +302,7 @@ const childTermAnalysis = async (
           noOfMicrofrontends: sanitizedNoOfMicrofrontends,
           aggressiveTrimming: useAggressiveTrimming,
           useEmbeddedFrequentTreeMining: sanitizedUseEmbeddedFrequentTreeMining,
+          pythonExecutable: sanitizedPythonExecutable,
         },
         analysis: {
           dotgraphTreesKmeans,
@@ -1150,7 +1160,8 @@ const pythonGspan = (
   sanitizedPythonUpperNodeLimit,
   sanitizedPythonLowerNodeLimit,
   sanitizedPythonSupport,
-  fileNameEnding
+  fileNameEnding,
+  sanitizedPythonExecutable
 ) => {
   let pyProg;
   let newGraphOutput;
@@ -1172,7 +1183,18 @@ const pythonGspan = (
       sanitizedSavedAnalysisId + fileNameEnding,
     ];
 
-    pyProg = spawnSync("pypy", pyArgs, { maxBuffer: Infinity });
+    // pyProg = spawnSync("pypy", pyArgs, { maxBuffer: Infinity });
+    pyProg = spawnSync(sanitizedPythonExecutable, pyArgs, { maxBuffer: Infinity });
+
+    if (pyProg?.error) {
+      console.log("python error: ", pyProg.error);
+      return "Error Executing Tree mining";
+    }
+
+    if (pyProg?.stderr.toString()) {
+      console.log("stderr: ", pyProg.stderr.toString());
+      return "stderror executing tree mining";
+    }
 
     if (pyProg.stdout.slice(0, 3).toString().startsWith("t #")) {
       //
@@ -1199,16 +1221,6 @@ const pythonGspan = (
 
   // remove file for gspan after finishing
   unlinkSync(sanitizedSavedAnalysisId + fileNameEnding);
-
-  if (pyProg?.error) {
-    console.log("python error: ", pyProg.error);
-    return "Error Executing Tree mining";
-  }
-
-  if (pyProg?.stderr.toString()) {
-    console.log("stderr: ", pyProg.stderr.toString());
-    return "stderror executing tree mining";
-  }
 
   // if it doesn't start with "t #" or the newGraphOutput doesn't exist it means that it didn't find any graphs (or didn't run at all) so just return an empty object
   if (!newGraphOutput?.startsWith("t #")) {
