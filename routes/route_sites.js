@@ -119,10 +119,13 @@ router.get("/:id", sessionCheck, getSite);
  *   post:
  *     description: Add new site
  *     requestBody:
+ *       description: Specify site url to crawl and optional slowCrawl option
  *       required: true
  *       content:
  *         application/json:
  *           schema:
+ *             required:
+ *               -  url
  *             type: object
  *             properties:
  *               url:

@@ -50,8 +50,10 @@ const createSite = async (req, res) => {
     }
 
     let sanitizedUrl = req.body.url.toString();
-    const sanitizedSlowCrawl = req.body.slowCrawl?.toString().toLowerCase() === "true";
+    const normalizedSlowCrawl = req.body.slowCrawl ?? req.body.slowcrawl;
+    const sanitizedSlowCrawl = normalizedSlowCrawl?.toString().toLowerCase() === "true";
     if (!sanitizedUrl.startsWith("http://") && !sanitizedUrl.startsWith("https://")) {
+      // TODO maybe add https instead of http
       sanitizedUrl = "http://" + sanitizedUrl;
     }
 
